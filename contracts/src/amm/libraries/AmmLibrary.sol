@@ -3,14 +3,18 @@ pragma solidity 0.8.24;
 
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
+import { IFactory } from "../../interfaces/IFactory.sol";
+import { IPair } from "../../interfaces/IPair.sol";
+
 /// @title AmmLibrary
 /// @notice Pure constant-product (x*y=k) AMM math shared by `Pair` and `Router`:
-///         token sorting, no-fee ratio quoting, and the 0.30%-fee swap formulas.
+///         token sorting, no-fee ratio quoting, the 0.30%-fee swap formulas, and
+///         `Factory`-aware reserve/path lookups for multi-hop routing.
 /// @dev invariant: `getAmountOut`/`getAmountIn` are inverses up to rounding, and that
-///      rounding always favors the pool (never lets `k` decrease). This library has
-///      no dependency on `Factory`/`Pair` addresses — the reserve-lookup helpers
-///      (`getReserves`, `getAmountsOut`, `getAmountsIn` for multi-hop paths) live in
-///      the Router once the Factory is wired up (Step 1.3).
+///      rounding always favors the pool (never lets `k` decrease). `getAmountsOut`/
+///      `getAmountsIn` chain these per-hop formulas along a `path`, so the same
+///      rounding direction (against the user, in favor of the pool) holds for every
+///      hop of a multi-hop trade.
 library AmmLibrary {
     /// @notice Numerator of the swap fee multiplier (997 / 1000 == 0.30% fee).
     uint256 internal constant FEE_NUMERATOR = 997;
@@ -33,6 +37,13 @@ library AmmLibrary {
     /// @notice Thrown when `getAmountIn`'s requested `amountOut` is >= `reserveOut`
     ///         (the pool cannot pay out that much, regardless of input).
     error InsufficientOutputAmount();
+
+    /// @notice Thrown when a multi-hop `path` has fewer than two tokens.
+    error InvalidPath();
+
+    /// @notice Thrown when `getReserves` is asked about a pair that has not been
+    ///         created on `factory` yet.
+    error PairDoesNotExist();
 
     /// @notice Babylonian-method integer square root.
     /// @dev Thin wrapper over OZ `Math.sqrt`, which rounds down (floor) — the
@@ -125,5 +136,79 @@ library AmmLibrary {
         uint256 numerator = reserveIn * amountOut * FEE_DENOMINATOR;
         uint256 denominator = (reserveOut - amountOut) * FEE_NUMERATOR;
         amountIn = (numerator / denominator) + 1;
+    }
+
+    /// @notice Fetches the reserves of `tokenA`/`tokenB` from `factory`, ordered to
+    ///         match the `(tokenA, tokenB)` argument order regardless of how the
+    ///         underlying `Pair` sorts `token0`/`token1`.
+    /// @dev Reverts with `PairDoesNotExist` if `factory` has no pair for these tokens.
+    /// @param factory Address of the `Factory` registry.
+    /// @param tokenA Address of the first token (any order).
+    /// @param tokenB Address of the second token (any order).
+    /// @return reserveA Reserve of `tokenA` in the pair.
+    /// @return reserveB Reserve of `tokenB` in the pair.
+    function getReserves(address factory, address tokenA, address tokenB)
+        internal
+        view
+        returns (uint256 reserveA, uint256 reserveB)
+    {
+        (address token0,) = sortTokens(tokenA, tokenB);
+        address pair = IFactory(factory).getPair(tokenA, tokenB);
+        if (pair == address(0)) revert PairDoesNotExist();
+
+        (uint112 reserve0, uint112 reserve1,) = IPair(pair).getReserves();
+        (reserveA, reserveB) = tokenA == token0
+            ? (uint256(reserve0), uint256(reserve1))
+            : (uint256(reserve1), uint256(reserve0));
+    }
+
+    /// @notice Computes all intermediate output amounts for an exact-in multi-hop swap.
+    /// @dev `amounts[0] == amountIn`; for each hop `i`, `amounts[i+1] =
+    ///      getAmountOut(amounts[i], reserveIn, reserveOut)`. Reverts with
+    ///      `InvalidPath` if `path.length < 2`.
+    /// @param factory Address of the `Factory` registry.
+    /// @param amountIn Exact amount of `path[0]` to swap.
+    /// @param path Ordered list of token addresses; each consecutive pair must have a pair.
+    /// @return amounts Array of length `path.length`, `amounts[0] == amountIn` and
+    ///         `amounts[i]` is the output of hop `i-1` for `i > 0`.
+    function getAmountsOut(address factory, uint256 amountIn, address[] memory path)
+        internal
+        view
+        returns (uint256[] memory amounts)
+    {
+        if (path.length < 2) revert InvalidPath();
+
+        amounts = new uint256[](path.length);
+        amounts[0] = amountIn;
+        for (uint256 i; i < path.length - 1; ++i) {
+            (uint256 reserveIn, uint256 reserveOut) = getReserves(factory, path[i], path[i + 1]);
+            amounts[i + 1] = getAmountOut(amounts[i], reserveIn, reserveOut);
+        }
+    }
+
+    /// @notice Computes all intermediate input amounts for an exact-out multi-hop swap.
+    /// @dev `amounts[amounts.length - 1] == amountOut`; walking the path backwards,
+    ///      for each hop `i` (from the last to the first), `amounts[i] =
+    ///      getAmountIn(amounts[i+1], reserveIn, reserveOut)`. Reverts with
+    ///      `InvalidPath` if `path.length < 2`.
+    /// @param factory Address of the `Factory` registry.
+    /// @param amountOut Exact amount of `path[path.length - 1]` desired.
+    /// @param path Ordered list of token addresses; each consecutive pair must have a pair.
+    /// @return amounts Array of length `path.length`, `amounts[amounts.length - 1] ==
+    ///         amountOut` and `amounts[i]` is the input required for hop `i` for
+    ///         `i < amounts.length - 1`.
+    function getAmountsIn(address factory, uint256 amountOut, address[] memory path)
+        internal
+        view
+        returns (uint256[] memory amounts)
+    {
+        if (path.length < 2) revert InvalidPath();
+
+        amounts = new uint256[](path.length);
+        amounts[amounts.length - 1] = amountOut;
+        for (uint256 i = path.length - 1; i > 0; --i) {
+            (uint256 reserveIn, uint256 reserveOut) = getReserves(factory, path[i - 1], path[i]);
+            amounts[i - 1] = getAmountIn(amounts[i], reserveIn, reserveOut);
+        }
     }
 }
