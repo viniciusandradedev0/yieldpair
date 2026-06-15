@@ -18,9 +18,10 @@ import { IPair } from "../interfaces/IPair.sol";
 ///      themselves, so stored reserves always reflect the pool's actual balances
 ///      immediately after any state-changing call returns.
 /// @dev invariant: the first `mint` permanently locks `MINIMUM_LIQUIDITY` LP shares to
-///      `address(0)`, so `totalSupply()` can never return to zero once liquidity has
-///      existed — this removes the share-inflation / divide-by-zero attack on an
-///      empty pool for all subsequent `mint`/`burn` calls.
+///      a dead address (`DEAD`, since OZ v5's `ERC20._mint` reverts on `address(0)`),
+///      so `totalSupply()` can never return to zero once liquidity has existed — this
+///      removes the share-inflation / divide-by-zero attack on an empty pool for all
+///      subsequent `mint`/`burn` calls.
 /// @dev The Pair trusts its caller (the Router) to have already transferred input
 ///      tokens to this contract before calling `mint`/`swap` — minted liquidity and
 ///      swap amounts are derived from the *delta* between current balances and the
@@ -33,6 +34,16 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
 
     /// @inheritdoc IPair
     uint256 public constant MINIMUM_LIQUIDITY = 1000;
+
+    /// @notice Address `MINIMUM_LIQUIDITY` LP shares are permanently locked to on the
+    ///         first `mint`.
+    /// @dev OZ v5's `ERC20._mint` reverts with `ERC20InvalidReceiver` if `account ==
+    ///      address(0)` (unlike the original Uniswap V2 ERC20, which allowed it), so
+    ///      the conventional `address(0)` burn-lock target is not usable here. This
+    ///      well-known "dead address" (`0x...dEaD`) has no known private key, so
+    ///      tokens sent here are unrecoverable — functionally equivalent to burning
+    ///      to `address(0)` for the purpose of permanently locking `MINIMUM_LIQUIDITY`.
+    address private constant DEAD = address(0xdEaD);
 
     /// @inheritdoc IPair
     address public immutable factory;
@@ -169,7 +180,7 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
     ///
     ///      First mint (empty pool): `liquidity = sqrt(amount0 * amount1) -
     ///      MINIMUM_LIQUIDITY`, and `MINIMUM_LIQUIDITY` LP shares are permanently
-    ///      burned to `address(0)` — see contract-level invariant.
+    ///      locked to `DEAD` — see contract-level invariant.
     ///
     ///      Subsequent mints: `liquidity = min(amount0 * totalSupply / reserve0,
     ///      amount1 * totalSupply / reserve1)`. Both divisions round down (floor),
@@ -187,7 +198,7 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
         uint256 totalSupply_ = totalSupply();
         if (totalSupply_ == 0) {
             liquidity = Math.sqrt(amount0 * amount1) - MINIMUM_LIQUIDITY;
-            _mint(address(0), MINIMUM_LIQUIDITY);
+            _mint(DEAD, MINIMUM_LIQUIDITY);
         } else {
             liquidity = Math.min(
                 (amount0 * totalSupply_) / reserve0_, (amount1 * totalSupply_) / reserve1_

@@ -24,27 +24,29 @@ qualquer janela sem reconfigurar.
 
 ```
 Estou retomando o projeto YieldPair (DEX AMM + lending integrado, EulerSwap-style,
-Foundry + React, testnet/portfólio). O contexto completo está em ROADMAP.md na raiz
-do repositório.
+Foundry + React, testnet/portfólio). O contexto completo está em ROADMAP.md e no
+plano /home/guest/.claude/plans/rippling-coalescing-kay.md.
 
 Antes de começar, verifique o ambiente e me reporte:
-1. `ls ~/.claude/agents` e `ls ~/.claude/skills` — confirme que os 5 agentes
-   (defi-architect, solidity-engineer, foundry-test-engineer, defi-security-auditor,
-   web3-frontend) e as 3 skills (amm-math, defi-security-checklist, foundry-workflow)
-   estão disponíveis.
-2. `forge --version` (deve ser 1.7.x) e `cd contracts && forge build` (deve passar).
-3. `git log --oneline -3` e `git status`.
+1. `forge --version` e `cd contracts && forge build` (deve passar).
+2. `git log --oneline -5` e `git status` (branch `desenvolvimento`).
+3. `forge test --summary` (39/39 devem passar nos unit/fuzz já existentes).
 
-Depois, leia ROADMAP.md e continue a partir do "Próximo passo" (Fase 1 — AMM),
-indo PASSO A PASSO, um agente por vez, com checkpoint entre cada passo:
+Estamos na Fase 1 (AMM), Passo 1.4 (testes), EM ANDAMENTO — ver "Status atual" e a
+seção do Passo 1.4 em ROADMAP.md para detalhes do que já foi feito (unit + fuzz
+prontos, bugfix do MINIMUM_LIQUIDITY/address(0) já aplicado em Pair.sol).
 
-- Passo 1.1 — invoque o agente `solidity-engineer` para criar TestToken,
-  interfaces e AmmLibrary. Pare em `forge build` verde e me mostre o resultado.
-- NÃO avance para o passo seguinte sem eu confirmar.
+Falta SOMENTE:
+- Continuar o agente `foundry-test-engineer` (agentId a6b7cb100d85787c2, ou um novo se
+  o anterior não estiver mais disponível) para criar `test/invariant/Amm.t.sol`
+  (StdInvariant usando o handler já escrito em
+  `test/invariant/handlers/AmmHandler.sol`), rodar `forge test -vv` 100% verde e
+  `forge coverage` para tokens/ e amm/.
+- Depois: Passo 1.5 — `defi-security-auditor` audita os contratos do AMM
+  (checklist defi-security-checklist).
+- Depois: Passo 1.6 — commit + push final da Fase 1 (pedir confirmação antes do push).
 
-Use as skills amm-math (fórmulas) e foundry-workflow (comandos) como referência,
-e defi-security-checklist na auditoria. É um projeto complexo: priorize correção
-sobre velocidade, e não pule fases.
+NÃO avance para a Fase 2 sem eu confirmar. Priorize correção sobre velocidade.
 ```
 
 ---
@@ -52,6 +54,12 @@ sobre velocidade, e não pule fases.
 ## 3. Onde estamos
 
 - ✅ Setup completo (agents, skills, scaffold, repo no GitHub, CI).
-- ⏭️ **Próximo passo: Fase 1 — AMM, Passo 1.1** (ver ROADMAP.md).
+- ✅ Fase 1, Passos 1.1–1.3: TestToken, interfaces (IPair/IFactory/IRouter),
+  AmmLibrary, Pair, Factory, Router — `forge build` verde, comitados em
+  `desenvolvimento`.
+- 🔄 Fase 1, Passo 1.4 (testes): unit (31) + fuzz (8) passando (39/39). Falta o
+  invariant test (`test/invariant/Amm.t.sol`, handler já escrito) + `forge coverage`.
+- ⏭️ Depois: Passo 1.5 (auditoria) → Passo 1.6 (commit/push final da Fase 1).
 
-Status detalhado e o plano por agente: **[ROADMAP.md](./ROADMAP.md)**.
+Status detalhado e o plano por agente: **[ROADMAP.md](./ROADMAP.md)** e
+`/home/guest/.claude/plans/rippling-coalescing-kay.md`.

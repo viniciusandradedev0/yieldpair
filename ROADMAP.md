@@ -37,7 +37,9 @@ commitar. Projeto complexo: preferimos lento e correto a rápido e quebrado.
 - [x] **Setup**: 5 agents + 3 skills (user-level); monorepo Foundry + frontend;
       repo no GitHub (https://github.com/viniciusandradedev0/yieldpair);
       submódulos forge-std + OpenZeppelin; CI (forge fmt/build/test).
-- [ ] **Fase 1 — AMM** ← **AQUI**
+- [x] **Fase 1 — AMM**: Passos 1.1, 1.2, 1.3 concluídos (TestToken, IPair/IFactory/
+      IRouter, AmmLibrary, Pair, Factory, Router — `forge build` verde). Passo 1.4
+      (testes) **em andamento** ← **AQUI**.
 - [ ] Fase 2 — LendingPool
 - [ ] Fase 3 — Integração (idle-reserve sweeping)
 - [ ] Fase 4 — Frontend + deploy Sepolia
@@ -67,11 +69,20 @@ commitar. Projeto complexo: preferimos lento e correto a rápido e quebrado.
   `swapExactTokensForTokens`; deadline + slippage min).
 - Checkpoint: `forge build` verde + `forge fmt`.
 
-**Passo 1.4 — `foundry-test-engineer`: testes**
-- Unit: mint/burn/swap, fee, MINIMUM_LIQUIDITY, deadline/slippage do Router.
-- Fuzz: `getAmountOut` nunca > reserva; LP round-trip não extrai mais do que pôs.
-- Invariant: `k` não decresce após swaps.
-- Checkpoint: `forge test` 100% verde.
+**Passo 1.4 — `foundry-test-engineer`: testes** ← **EM ANDAMENTO**
+- Unit: mint/burn/swap, fee, MINIMUM_LIQUIDITY, deadline/slippage do Router. ✅
+  (`test/unit/{Pair,Factory,Router}.t.sol` — 31 testes passando)
+- Fuzz: `getAmountOut` nunca > reserva; round-trip `getAmountIn∘getAmountOut` atinge
+  o alvo. ✅ (`test/fuzz/AmmLibrary.t.sol` — 8 testes, 256 runs)
+- Invariant: `k` não decresce após swaps. ⏳ **PENDENTE** — handler já escrito em
+  `test/invariant/handlers/AmmHandler.sol`, falta criar `test/invariant/Amm.t.sol`
+  e rodar `forge test` + `forge coverage` completos.
+- **Bugfix encontrado durante os testes**: `Pair.mint` (1º depósito) chamava
+  `_mint(address(0), MINIMUM_LIQUIDITY)`, mas OZ v5 `ERC20._mint` reverte para
+  `address(0)` — todo primeiro `mint()` revertia. Corrigido: `MINIMUM_LIQUIDITY` é
+  queimado para `address(0xdEaD)` (constante `DEAD`) em vez de `address(0)`.
+- Checkpoint: `forge test` 100% verde (39/39 passando até agora, faltam os
+  invariant tests) + `forge coverage` dos contratos do AMM.
 
 **Passo 1.5 — `defi-security-auditor`: auditoria da Fase 1**
 - Rodar o `defi-security-checklist` contra os contratos.
