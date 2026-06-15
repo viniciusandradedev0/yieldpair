@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main, desenvolvimento]
+  pull_request:
+
+jobs:
+  contracts:
+    name: Foundry (build + test + fmt)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Check formatting
+        run: forge fmt --check
+
+      - name: Build
+        run: forge build --sizes
+
+      - name: Run tests
+        run: forge test -vvv
