@@ -135,6 +135,7 @@ contract Router is IRouter {
         uint256 deadline
     ) external ensure(deadline) returns (uint256[] memory amounts) {
         if (path.length < 2) revert InvalidPath();
+        if (amountOutMin == 0) revert InsufficientOutputAmount();
 
         amounts = AmmLibrary.getAmountsOut(factory, amountIn, path);
         if (amounts[amounts.length - 1] < amountOutMin) revert InsufficientOutputAmount();

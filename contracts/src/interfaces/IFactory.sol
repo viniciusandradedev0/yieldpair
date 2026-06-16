@@ -4,7 +4,8 @@ pragma solidity 0.8.24;
 /// @title IFactory
 /// @notice Interface for the Pair factory/registry.
 /// @dev invariant: for any two distinct tokens (A, B), `getPair(A, B) == getPair(B, A)`
-///      and resolves to at most one `Pair` contract, deployed deterministically.
+///      and resolves to at most one `Pair` contract. Pairs are deployed with `new Pair()`
+///      (CREATE, not CREATE2), so addresses are not deterministic off-chain.
 interface IFactory {
     /// @notice Emitted when a new pair is created.
     /// @param token0 The first token of the pair, sorted by address.

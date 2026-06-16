@@ -7,6 +7,11 @@ pragma solidity 0.8.24;
 ///         OZ `ERC20` base contract that `Pair` will inherit, so it is not repeated here).
 /// @dev invariant: reserve0 * reserve1 (k) never decreases after `swap` (after fees,
 ///      it strictly increases); `mint`/`burn` preserve the pool's per-share value.
+///
+/// Token assumptions: this pool only supports "well-behaved" ERC20 tokens — i.e. tokens
+/// whose `transfer`/`transferFrom` deliver exactly the stated amount to the recipient.
+/// Fee-on-transfer, rebasing, and ERC777-with-hooks tokens are NOT supported and will
+/// cause reserve accounting to drift, potentially breaking the k-invariant.
 interface IPair {
     /// @notice Emitted when liquidity is minted to `sender`, crediting `amount0`/`amount1`.
     event Mint(address indexed sender, uint256 amount0, uint256 amount1);

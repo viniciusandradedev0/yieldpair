@@ -167,7 +167,7 @@ contract AmmHandler is Test {
         uint256 kBefore = uint256(r0) * uint256(r1);
 
         vm.prank(actor);
-        try router.swapExactTokensForTokens(amountIn, 0, path, actor, block.timestamp) returns (
+        try router.swapExactTokensForTokens(amountIn, 1, path, actor, block.timestamp) returns (
             uint256[] memory
         ) {
             ghost_swapCalls++;
