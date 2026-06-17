@@ -199,7 +199,7 @@ contract PairTest is Test {
 
         // Bob calls mint without transferring anything.
         vm.prank(bob);
-        vm.expectRevert(Pair.InsufficientLiquidityMinted.selector);
+        vm.expectRevert(IPair.InsufficientLiquidityMinted.selector);
         pair.mint(bob);
     }
 
@@ -261,7 +261,7 @@ contract PairTest is Test {
         vm.startPrank(alice);
         pair.transfer(address(pair), 1);
 
-        vm.expectRevert(Pair.InsufficientLiquidityBurned.selector);
+        vm.expectRevert(IPair.InsufficientLiquidityBurned.selector);
         pair.burn(alice);
         vm.stopPrank();
     }
@@ -322,14 +322,14 @@ contract PairTest is Test {
 
         // Requesting exactly reserve1 (>= reserve) must revert.
         (, uint112 r1,) = pair.getReserves();
-        vm.expectRevert(Pair.InsufficientLiquidity.selector);
+        vm.expectRevert(IPair.InsufficientLiquidity.selector);
         pair.swap(0, r1, bob, "");
         vm.stopPrank();
 
         // Sanity: also revert when requesting amount0Out >= reserve0 on the other side.
         vm.startPrank(bob);
         _erc20(token1).transfer(address(pair), 1 ether);
-        vm.expectRevert(Pair.InsufficientLiquidity.selector);
+        vm.expectRevert(IPair.InsufficientLiquidity.selector);
         pair.swap(r0, 0, bob, "");
         vm.stopPrank();
     }
@@ -340,7 +340,7 @@ contract PairTest is Test {
 
         vm.startPrank(bob);
         _erc20(token0).transfer(address(pair), 1 ether);
-        vm.expectRevert(Pair.InsufficientOutputAmount.selector);
+        vm.expectRevert(IPair.InsufficientOutputAmount.selector);
         pair.swap(0, 0, bob, "");
         vm.stopPrank();
     }
@@ -352,7 +352,7 @@ contract PairTest is Test {
 
         // Bob requests output without transferring anything in.
         vm.prank(bob);
-        vm.expectRevert(Pair.InsufficientInputAmount.selector);
+        vm.expectRevert(IPair.InsufficientInputAmount.selector);
         pair.swap(0, 1 ether, bob, "");
     }
 
@@ -368,7 +368,7 @@ contract PairTest is Test {
         vm.startPrank(bob);
         _erc20(token0).transfer(address(pair), amountIn);
         // Requesting more than the fair amount must revert with K().
-        vm.expectRevert(Pair.K.selector);
+        vm.expectRevert(IPair.K.selector);
         pair.swap(0, fairOut + 1, bob, "");
         vm.stopPrank();
     }
@@ -383,7 +383,7 @@ contract PairTest is Test {
 
         vm.startPrank(bob);
         _erc20(token0).transfer(address(pair), amountIn);
-        vm.expectRevert(Pair.InvalidTo.selector);
+        vm.expectRevert(IPair.InvalidTo.selector);
         pair.swap(0, fairOut, token1, "");
         vm.stopPrank();
     }
