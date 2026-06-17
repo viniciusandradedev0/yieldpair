@@ -40,7 +40,7 @@ commitar. Projeto complexo: preferimos lento e correto a rápido e quebrado.
 - [x] **Fase 1 — AMM**: Passos 1.1–1.5 concluídos (TestToken, IPair/IFactory/IRouter,
       AmmLibrary, Pair, Factory, Router — 42/42 testes verde, auditoria limpa).
       Passo 1.6 (commit + push final) ← **AQUI**.
-- [ ] Fase 2 — LendingPool
+- 🔄 **Fase 2 — LendingPool**: Passo 2.0 concluído (design aprovado). Passo 2.1 ← **AQUI**.
 - [ ] Fase 3 — Integração (idle-reserve sweeping)
 - [ ] Fase 4 — Frontend + deploy Sepolia
 
@@ -94,10 +94,24 @@ commitar. Projeto complexo: preferimos lento e correto a rápido e quebrado.
 
 ---
 
-## Fase 2 — LendingPool (resumo; detalhar ao chegar)
-`supply/withdraw/borrow/repay/accrueInterest/liquidate`, juros por índice
-acumulado, `healthFactor`, `IPriceOracle` + `MockOracle`. Mesma cadência de
-agentes (engineer → test → auditor). Oráculo: **nunca** spot do AMM (documentar).
+## Fase 2 — LendingPool
+
+**Passo 2.0 — `defi-architect`: validar mecânica** ✅ **CONCLUÍDO**
+Design completo em `docs/lending-design.md`. Decisões: multi-ativo único, juros
+linear por segundo (base 2%+slope 20%), HF 1e18-scaled, closeFactor 50%,
+liquidationBonus 1.08, MockOracle (1e18=$1), 10 invariantes para os testes.
+
+**Passo 2.1 — `solidity-engineer`: oráculo + LendingPool** ⏳ PENDENTE ← **AQUI**
+Implementar conforme `docs/lending-design.md`:
+- `src/interfaces/IPriceOracle.sol`
+- `src/interfaces/ILendingPool.sol`
+- `src/oracle/MockOracle.sol`
+- `src/lending/LendingPool.sol`
+Checkpoint: `forge build` verde + `forge fmt`.
+
+**Passo 2.2 — `foundry-test-engineer`: testes do lending** ⏳ PENDENTE
+**Passo 2.3 — `defi-security-auditor`: auditoria do lending** ⏳ PENDENTE
+**Passo 2.4 — commit + push da Fase 2** ⏳ PENDENTE
 
 ## Fase 3 — Integração (resumo)
 `Pair` com `lendingPool` + `bufferBps`; `totalReserve = saldo + supplied`;
