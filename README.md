@@ -24,8 +24,8 @@ implementado do zero para fins de estudo.
 | Fase | Entrega | Status |
 |------|---------|--------|
 | 1 | **AMM** Uniswap V2-style: `Factory` / `Pair` (`x*y=k`) / `Router` + tokens de teste | ✅ completa |
-| 2 | **LendingPool** Aave-style: supply/borrow/withdraw/repay, juros por índice, health factor, liquidação | 🔄 em andamento |
-| 3 | **Integração**: a reserva ociosa do `Pair` é emprestada no `LendingPool` (yield aos LPs) | ⬜ |
+| 2 | **LendingPool** Aave-style: supply/borrow/withdraw/repay, juros por índice, health factor, liquidação | ✅ completa |
+| 3 | **Integração**: a reserva ociosa do `Pair` é emprestada no `LendingPool` (yield aos LPs) | ✅ completa |
 | 4 | **Frontend** (React + wagmi) + deploy na Sepolia | ⬜ |
 
 ## Contratos implementados
@@ -44,6 +44,14 @@ implementado do zero para fins de estudo.
 |----------|-----------|
 | `MockOracle` | Oráculo owner-controlled (testnet); nunca usa spot do AMM |
 | `LendingPool` | supply / borrow / withdraw / repay / liquidate; juros por borrowIndex acumulado; healthFactor multi-ativo 1e18-scaled; closeFactor 50%, liquidationBonus 1.08× |
+
+### Fase 3 — Integração AMM↔Lending
+| Contrato / Arquivo | Descrição |
+|--------------------|-----------|
+| `Pair` (modificado) | Ganha `lendingPool` + `bufferBps`; contabilidade muda para `totalReserve = físico + supplied`; implementa `_sweepExcess` e `_ensureLiquidity` |
+| `test/mocks/MockLendingPool.sol` | Mock 1:1 (sem juros) com flag `freeze` para simular alta utilização em testes |
+| `test/unit/Integration.t.sol` | 12 testes de integração Pair↔LendingPool |
+| `test/invariant/Integration.t.sol` | Invariantes de totalReserve sob sequências aleatórias de operações |
 
 ## Stack
 
@@ -67,7 +75,7 @@ deployments/ # endereços por rede
 ```bash
 cd contracts
 forge build
-forge test   # 77 testes: 54 unit + 11 fuzz + 12 invariant (3 suites cada fase)
+forge test   # 91 testes: unit + fuzz + invariant (Fases 1–3)
 forge fmt --check
 ```
 
@@ -84,6 +92,79 @@ forge fmt --check
 - **Arredondamento sempre contra o usuário** — `debtOf` arredonda UP (usuário deve mais), `supplyBalanceOf` DOWN (usuário recebe menos), `seizeAmount` DOWN (liquidador recebe menos → borrower não é sobre-penalizado).
 - **CEI estrito em todas as funções core** — `accrueInterest` primeiro, depois validações, mutações de state, HF check, e só então o transfer externo.
 - **`healthFactor == 1e18` é saudável** — posição exatamente no limite não é liquidável e não trava.
+
+### Integração AMM↔Lending (Fase 3)
+
+#### Contabilidade: coordenada `totalReserve`
+
+O `Pair` passa a usar uma contabilidade de **reserva total**:
+
+```
+totalReserve_i  =  balanceOf(pair)_i  +  supplied_i
+```
+
+Onde `supplied_i` é o principal depositado no `LendingPool` para o token `i`. A invariante é mantida em todo caminho de execução (mint, swap, burn, sweep, recall).
+
+O `getReserves()` retorna `totalReserve`, então o k-check e o TWAP continuam operando sobre a liquidez completa do par — não apenas sobre o saldo físico.
+
+#### Trade-off: buffer de liquidez vs yield
+
+O parâmetro `bufferBps` (em basis points, configurável pela Factory) controla a fração mínima de `totalReserve` que o `Pair` mantém disponível fisicamente:
+
+```
+targetLiquid_i  =  ceil(totalReserve_i × bufferBps / 10_000)
+```
+
+| `bufferBps` | Fração líquida | Implicação |
+|-------------|---------------|------------|
+| `1_000` (10%) | 10% retido no pool | Mais capital no lending → mais yield; risco de falha em swaps grandes |
+| `5_000` (50%) | 50% retido | Equilíbrio moderado |
+| `10_000` (100%) | 100% retido | Comportamento idêntico ao AMM puro (zero yield extra) |
+
+**Quanto menor o buffer, maior o rendimento potencial** — mas swaps que precisem de mais do que o buffer encontrarão o lending em alta utilização e poderão falhar graciosamente (ver abaixo).
+
+#### `_sweepExcess` — depositando liquidez ociosa
+
+Após cada `mint` ou `swap`, qualquer saldo físico acima de `targetLiquid_i` é depositado no `LendingPool`:
+
+```
+excess_i  =  balanceOf(pair)_i  −  targetLiquid_i   (se positivo)
+```
+
+O estado (`reserve_i -= excess`, `supplied_i += excess`) é atualizado **após** o `supply` externo retornar, dentro do contexto protegido pelo `nonReentrant` da função chamadora.
+
+#### `_ensureLiquidity` — resgatando liquidez antes de pagar
+
+Antes de transferir tokens para o destinatário de um `swap` ou `burn`, o `Pair` verifica se o saldo físico cobre o valor de saída. Se não cobrir, tenta sacar o déficit do `LendingPool`:
+
+```solidity
+uint256 got = balanceOf(pair)_after − balanceOf(pair)_before;
+```
+
+O delta é medido fisicamente (não confiando no valor nominal solicitado), pois pools baseados em shares podem entregar `actualAmount ≤ requested` por arredondamento de índice.
+
+#### Comportamento em alta utilização (falha graciosa)
+
+Se o lending pool estiver com utilização muito alta e não conseguir honrar o saque:
+
+- **`swap`** — reverte com `InsufficientLiquidity`. O pool **não trava**: o caller simplesmente tenta mais tarde ou reduz o tamanho do swap.
+- **`burn`** — reverte com `LendingWithdrawFailed`. Os LP tokens do usuário continuam intactos.
+- **`setLendingPool`** — reverte com `CannotRecall` se não conseguir resgatar todo o principal antes de trocar de pool.
+
+O pool nunca entra em estado inconsistente: a invariante `totalReserve == físico + supplied` é preservada mesmo nos reverts.
+
+#### Segurança: delta-measurement vs nominal
+
+O `LendingPool` real usa shares com acréscimo de juros (`supplyIndex`). O `withdraw(token, amount)` entrega `floor(shares × supplyIndex / WAD) ≤ amount`. Sem a medição por delta, o `supplied_i` poderia ficar com saldo fictício (divergindo da realidade). O padrão adotado:
+
+```solidity
+uint256 before = IERC20(token).balanceOf(address(this));
+ILendingPool(pool).withdraw(token, needed);
+uint256 got = IERC20(token).balanceOf(address(this)) - before;
+// usa `got`, não `needed`
+```
+
+Isso torna o `Pair` robusto a qualquer implementação de lending pool, independente do modelo de arredondamento.
 
 ---
 
