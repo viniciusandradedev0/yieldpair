@@ -37,8 +37,10 @@ commitar. Projeto complexo: preferimos lento e correto a rápido e quebrado.
 - [x] **Setup**: 5 agents + 3 skills (user-level); monorepo Foundry + frontend;
       repo no GitHub (https://github.com/viniciusandradedev0/yieldpair);
       submódulos forge-std + OpenZeppelin; CI (forge fmt/build/test).
-- [ ] **Fase 1 — AMM** ← **AQUI**
-- [ ] Fase 2 — LendingPool
+- [x] **Fase 1 — AMM**: Passos 1.1–1.5 concluídos (TestToken, IPair/IFactory/IRouter,
+      AmmLibrary, Pair, Factory, Router — 42/42 testes verde, auditoria limpa).
+      Passo 1.6 (commit + push final) ← **AQUI**.
+- 🔄 **Fase 2 — LendingPool**: Passo 2.0 concluído (design aprovado). Passo 2.1 ← **AQUI**.
 - [ ] Fase 3 — Integração (idle-reserve sweeping)
 - [ ] Fase 4 — Frontend + deploy Sepolia
 
@@ -67,25 +69,49 @@ commitar. Projeto complexo: preferimos lento e correto a rápido e quebrado.
   `swapExactTokensForTokens`; deadline + slippage min).
 - Checkpoint: `forge build` verde + `forge fmt`.
 
-**Passo 1.4 — `foundry-test-engineer`: testes**
-- Unit: mint/burn/swap, fee, MINIMUM_LIQUIDITY, deadline/slippage do Router.
-- Fuzz: `getAmountOut` nunca > reserva; LP round-trip não extrai mais do que pôs.
-- Invariant: `k` não decresce após swaps.
-- Checkpoint: `forge test` 100% verde.
+**Passo 1.4 — `foundry-test-engineer`: testes** ✅ **CONCLUÍDO**
+- Unit: mint/burn/swap, fee, MINIMUM_LIQUIDITY, deadline/slippage do Router. ✅
+  (`test/unit/{Pair,Factory,Router}.t.sol` — 39 testes passando)
+- Fuzz: `getAmountOut` nunca > reserva; round-trip `getAmountIn∘getAmountOut` atinge
+  o alvo. ✅ (`test/fuzz/AmmLibrary.t.sol` — 8 testes, 256 runs)
+- Invariant: k nunca decresce; `totalSupply >= MINIMUM_LIQUIDITY`; solvência
+  (balances ≥ reserves). ✅ (`test/invariant/Amm.t.sol` — 3 invariants, 256 runs,
+  12.800 calls cada; handler em `test/invariant/handlers/AmmHandler.sol`)
+- **Bugfix**: `Pair.mint` chamava `_mint(address(0), MINIMUM_LIQUIDITY)` — OZ v5
+  reverte para `address(0)`. Corrigido: queima para `address(0xdEaD)` (DEAD).
+- Cobertura (forge coverage): Factory 100% | Pair 82% | Router 88% | AmmLibrary 80%
+- Checkpoint: `forge test` 42/42 verde + `forge coverage` executado. ✅
 
-**Passo 1.5 — `defi-security-auditor`: auditoria da Fase 1**
-- Rodar o `defi-security-checklist` contra os contratos.
-- Corrigir findings (volta ao `solidity-engineer` se preciso).
-- Checkpoint: sem findings High/Critical em aberto.
+**Passo 1.5 — `defi-security-auditor`: auditoria da Fase 1** ✅ **CONCLUÍDO**
+- Checklist executado contra todos os contratos AMM (Pair, Factory, Router, AmmLibrary).
+- Resultado: 0 Critical, 0 High. 2 Low (sem perda de fundos), 10 Informational.
+- Itens Low/Info aplicados: NatSpec IFactory corrigido (CREATE não CREATE2); premissa
+  "no fee-on-transfer tokens" documentada no IPair; `amountOutMin == 0` rejeitado no
+  Router para erro imediato; `AmmHandler.swap` atualizado para `amountOutMin = 1`.
+- Checkpoint: sem findings High/Critical em aberto. ✅
 
 **Passo 1.6 — commit + push da Fase 1.**
 
 ---
 
-## Fase 2 — LendingPool (resumo; detalhar ao chegar)
-`supply/withdraw/borrow/repay/accrueInterest/liquidate`, juros por índice
-acumulado, `healthFactor`, `IPriceOracle` + `MockOracle`. Mesma cadência de
-agentes (engineer → test → auditor). Oráculo: **nunca** spot do AMM (documentar).
+## Fase 2 — LendingPool
+
+**Passo 2.0 — `defi-architect`: validar mecânica** ✅ **CONCLUÍDO**
+Design completo em `docs/lending-design.md`. Decisões: multi-ativo único, juros
+linear por segundo (base 2%+slope 20%), HF 1e18-scaled, closeFactor 50%,
+liquidationBonus 1.08, MockOracle (1e18=$1), 10 invariantes para os testes.
+
+**Passo 2.1 — `solidity-engineer`: oráculo + LendingPool** ⏳ PENDENTE ← **AQUI**
+Implementar conforme `docs/lending-design.md`:
+- `src/interfaces/IPriceOracle.sol`
+- `src/interfaces/ILendingPool.sol`
+- `src/oracle/MockOracle.sol`
+- `src/lending/LendingPool.sol`
+Checkpoint: `forge build` verde + `forge fmt`.
+
+**Passo 2.2 — `foundry-test-engineer`: testes do lending** ⏳ PENDENTE
+**Passo 2.3 — `defi-security-auditor`: auditoria do lending** ⏳ PENDENTE
+**Passo 2.4 — commit + push da Fase 2** ⏳ PENDENTE
 
 ## Fase 3 — Integração (resumo)
 `Pair` com `lendingPool` + `bufferBps`; `totalReserve = saldo + supplied`;
