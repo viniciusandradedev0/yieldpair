@@ -2,6 +2,7 @@
 pragma solidity 0.8.24;
 
 import { IFactory } from "../interfaces/IFactory.sol";
+import { IPair } from "../interfaces/IPair.sol";
 import { Pair } from "./Pair.sol";
 import { AmmLibrary } from "./libraries/AmmLibrary.sol";
 
@@ -11,6 +12,9 @@ import { AmmLibrary } from "./libraries/AmmLibrary.sol";
 ///      and resolves to at most one `Pair` contract, deployed at most once. `allPairs`
 ///      is append-only and `allPairs.length == allPairsLength()`.
 contract Factory is IFactory {
+    /// @inheritdoc IFactory
+    address public owner;
+
     /// @inheritdoc IFactory
     mapping(address => mapping(address => address)) public getPair;
 
@@ -22,6 +26,18 @@ contract Factory is IFactory {
 
     /// @notice Thrown when a pair for the given tokens already exists.
     error PairExists();
+
+    /// @notice Thrown when a function restricted to `owner` is called by someone else.
+    error Forbidden();
+
+    constructor() {
+        owner = msg.sender;
+    }
+
+    modifier onlyOwner() {
+        if (msg.sender != owner) revert Forbidden();
+        _;
+    }
 
     /// @inheritdoc IFactory
     /// @dev Sorts `tokenA`/`tokenB` via `AmmLibrary.sortTokens` (also reverts on
@@ -47,5 +63,10 @@ contract Factory is IFactory {
     /// @inheritdoc IFactory
     function allPairsLength() external view returns (uint256) {
         return allPairs.length;
+    }
+
+    /// @inheritdoc IFactory
+    function setPairLendingPool(address pair, address pool, uint16 bufferBps) external onlyOwner {
+        IPair(pair).setLendingPool(pool, bufferBps);
     }
 }

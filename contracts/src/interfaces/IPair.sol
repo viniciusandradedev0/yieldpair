@@ -13,6 +13,10 @@ pragma solidity 0.8.24;
 /// Fee-on-transfer, rebasing, and ERC777-with-hooks tokens are NOT supported and will
 /// cause reserve accounting to drift, potentially breaking the k-invariant.
 interface IPair {
+    // -------------------------------------------------------------------------
+    // Events
+    // -------------------------------------------------------------------------
+
     /// @notice Emitted when liquidity is minted to `sender`, crediting `amount0`/`amount1`.
     event Mint(address indexed sender, uint256 amount0, uint256 amount1);
 
@@ -32,9 +36,72 @@ interface IPair {
     /// @notice Emitted whenever the stored reserves are synced to the actual token balances.
     event Sync(uint112 reserve0, uint112 reserve1);
 
+    /// @notice Emitted when the lending pool integration is configured or disabled.
+    event LendingPoolSet(address indexed pool, uint16 bufferBps);
+
+    /// @notice Emitted when excess idle liquidity is swept into the lending pool.
+    event Sweep(address indexed token, uint256 amount);
+
+    /// @notice Emitted when liquidity is recalled from the lending pool to satisfy a withdrawal
+    /// or swap.
+    event Recall(address indexed token, uint256 amount);
+
+    // -------------------------------------------------------------------------
+    // Errors
+    // -------------------------------------------------------------------------
+
+    /// @notice Thrown when any function restricted to `factory` is called by someone else.
+    error Forbidden();
+
+    /// @notice Thrown if `initialize` is called more than once.
+    error AlreadyInitialized();
+
+    /// @notice Thrown when `mint`/`burn`/`swap` would move zero liquidity/output.
+    error InsufficientLiquidityMinted();
+
+    /// @notice Thrown when `burn` would return zero of both tokens.
+    error InsufficientLiquidityBurned();
+
+    /// @notice Thrown when `swap` is called with both outputs zero.
+    error InsufficientOutputAmount();
+
+    /// @notice Thrown when a requested output exceeds the available reserve.
+    error InsufficientLiquidity();
+
+    /// @notice Thrown when `swap`'s recipient is one of the pair's own tokens.
+    error InvalidTo();
+
+    /// @notice Thrown when `swap` receives no input tokens (both inputs zero).
+    error InsufficientInputAmount();
+
+    /// @notice Thrown when the post-swap constant-product check fails (k would decrease).
+    error K();
+
+    /// @notice Thrown when a reserve value would overflow `uint112` on `_update`.
+    error Overflow();
+
+    /// @notice Thrown when `bufferBps` is outside the allowed [MIN_BUFFER_BPS, MAX_BUFFER_BPS]
+    /// range.
+    error InvalidBuffer();
+
+    /// @notice Thrown when `burn` cannot recall enough liquidity from the lending pool.
+    error LendingWithdrawFailed();
+
+    /// @notice Thrown when `setLendingPool` cannot drain all supplied tokens before switching
+    /// pools.
+    error CannotRecall();
+
+    // -------------------------------------------------------------------------
+    // Constants
+    // -------------------------------------------------------------------------
+
     /// @notice LP tokens permanently locked on first mint to prevent the
     ///         share-inflation / division-by-zero attack on an empty pool.
     function MINIMUM_LIQUIDITY() external pure returns (uint256);
+
+    // -------------------------------------------------------------------------
+    // Immutables / state
+    // -------------------------------------------------------------------------
 
     /// @notice The factory that deployed this pair.
     function factory() external view returns (address);
@@ -45,9 +112,21 @@ interface IPair {
     /// @notice The second token of the pair, sorted by address.
     function token1() external view returns (address);
 
+    /// @notice The lending pool this pair supplies idle liquidity to, or `address(0)` for AMM-only
+    /// mode.
+    function lendingPool() external view returns (address);
+
+    /// @notice Minimum fraction of total reserves that must stay liquid in this contract (basis
+    /// points).
+    function bufferBps() external view returns (uint16);
+
+    // -------------------------------------------------------------------------
+    // Views
+    // -------------------------------------------------------------------------
+
     /// @notice Current reserves and the timestamp of the last reserve update.
-    /// @return reserve0 Reserve of token0, as of `blockTimestampLast`.
-    /// @return reserve1 Reserve of token1, as of `blockTimestampLast`.
+    /// @return reserve0 Total reserve of token0 (physical + supplied), as of `blockTimestampLast`.
+    /// @return reserve1 Total reserve of token1 (physical + supplied), as of `blockTimestampLast`.
     /// @return blockTimestampLast Timestamp (mod 2**32) of the last reserve update.
     function getReserves()
         external
@@ -66,10 +145,29 @@ interface IPair {
     ///         protocol fee accounting on mint/burn).
     function kLast() external view returns (uint256);
 
+    /// @notice Returns the principal amounts currently supplied to the lending pool for each token.
+    function suppliedReserves() external view returns (uint112 s0, uint112 s1);
+
+    // -------------------------------------------------------------------------
+    // Factory-only mutators
+    // -------------------------------------------------------------------------
+
     /// @notice One-time initializer called by the factory immediately after deployment.
     /// @param token0_ Address of token0 (already sorted).
     /// @param token1_ Address of token1 (already sorted).
     function initialize(address token0_, address token1_) external;
+
+    /// @notice Configures (or removes) the lending pool integration for this pair.
+    /// @dev Only callable by the `factory`. Recalls all previously supplied tokens first.
+    /// @param pool     Address of the `ILendingPool` to integrate with, or `address(0)` to
+    ///                 disable.
+    /// @param bufferBps_ Minimum liquid fraction to keep in the pair (basis points).
+    ///                   Ignored when `pool == address(0)`.
+    function setLendingPool(address pool, uint16 bufferBps_) external;
+
+    // -------------------------------------------------------------------------
+    // User-facing mutators
+    // -------------------------------------------------------------------------
 
     /// @notice Mints LP tokens to `to` based on the tokens transferred to this
     ///         contract since the last call (balances vs. stored reserves).
