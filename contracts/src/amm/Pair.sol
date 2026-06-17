@@ -501,12 +501,11 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
     /// @dev Sweeps idle physical liquidity above the buffer threshold into the lending pool.
     ///      No-op when `lendingPool == address(0)` (checked by caller).
     ///
-    ///      CEI: state mutations (`reserve_i -= excess`, `supplied_i += excess`) happen
-    ///      AFTER `forceApprove` but BEFORE the `supply` call would be re-entered — however,
-    ///      `supply` is not re-entrant here because:
-    ///        1. The nonReentrant guard on the calling function prevents re-entry into Pair.
-    ///        2. The state update is applied immediately after the external `supply` call
-    ///           returns, within the same function context.
+    ///      CEI note: state mutations (`reserve_i -= excess`, `supplied_i += excess`) happen
+    ///      AFTER the external `supply` call returns. Re-entry into this Pair is prevented by
+    ///      the `nonReentrant` guard on the calling function (`mint`/`swap`). The `lendingPool`
+    ///      is expected to be a trusted, audited contract; a malicious pool could observe
+    ///      transiently inconsistent reserves during the `supply` call.
     ///      Rounding: `targetLiquid` rounds UP (ceiling) so the buffer is slightly
     ///      over-reserved — this rounds against deploying funds to yield, which is
     ///      conservative and safe for the pool.
@@ -556,17 +555,20 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
         if (physical >= amountOut) return true;
 
         uint256 needed = amountOut - physical;
+        uint256 before = physical; // already read above; avoids a redundant balanceOf STATICCALL
         try ILendingPool(lendingPool).withdraw(token, needed) {
-            // Update bookkeeping: move `needed` from supplied back to physical reserve.
+            // Measure the actual amount received — share-based pools may deliver < needed.
+            uint256 got = IERC20(token).balanceOf(address(this)) - before;
             if (token == token0) {
-                reserve0 += uint112(needed);
-                supplied0 -= uint112(needed);
+                reserve0 += uint112(got);
+                supplied0 -= uint112(got);
             } else {
-                reserve1 += uint112(needed);
-                supplied1 -= uint112(needed);
+                reserve1 += uint112(got);
+                supplied1 -= uint112(got);
             }
-            emit Recall(token, needed);
-            return true;
+            emit Recall(token, got);
+            // Return true only if we received enough to cover the required output.
+            return got >= needed;
         } catch {
             return false;
         }
@@ -574,7 +576,8 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
 
     /// @dev Recalls ALL supplied funds from the current lending pool.
     ///      Called by `setLendingPool` before switching or disabling the lending pool.
-    ///      Reverts with `CannotRecall` if any withdrawal fails.
+    ///      Reverts with `CannotRecall` if any withdrawal fails or delivers less than
+    ///      the full principal (any shortfall means we cannot safely switch pools).
     ///      No-op when `lendingPool == address(0)` or no funds are supplied.
     function _recallAll() private {
         address pool = lendingPool;
@@ -584,21 +587,27 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
         uint112 s1 = supplied1;
 
         if (s0 > 0) {
-            // External call: withdraw principal from lending pool.
+            uint256 before0 = IERC20(token0).balanceOf(address(this));
             try ILendingPool(pool).withdraw(token0, s0) {
-                reserve0 += s0;
+                uint256 got0 = IERC20(token0).balanceOf(address(this)) - before0;
+                // Require exact recall — any shortfall means we cannot safely switch pools.
+                if (got0 < s0) revert CannotRecall();
+                reserve0 += uint112(got0);
                 supplied0 = 0;
-                emit Recall(token0, s0);
+                emit Recall(token0, got0);
             } catch {
                 revert CannotRecall();
             }
         }
 
         if (s1 > 0) {
+            uint256 before1 = IERC20(token1).balanceOf(address(this));
             try ILendingPool(pool).withdraw(token1, s1) {
-                reserve1 += s1;
+                uint256 got1 = IERC20(token1).balanceOf(address(this)) - before1;
+                if (got1 < s1) revert CannotRecall();
+                reserve1 += uint112(got1);
                 supplied1 = 0;
-                emit Recall(token1, s1);
+                emit Recall(token1, got1);
             } catch {
                 revert CannotRecall();
             }
