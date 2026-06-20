@@ -145,7 +145,9 @@ interface IPair {
     ///         protocol fee accounting on mint/burn).
     function kLast() external view returns (uint256);
 
-    /// @notice Returns the principal amounts currently supplied to the lending pool for each token.
+    /// @notice Returns the live balance the pair currently holds in the lending pool for
+    ///         each token, read directly from `ILendingPool.supplyBalanceOf` (i.e. principal
+    ///         plus any accrued interest, NOT a static principal cache).
     function suppliedReserves() external view returns (uint112 s0, uint112 s1);
 
     // -------------------------------------------------------------------------

@@ -97,8 +97,11 @@ contract MockLendingPool is ILendingPool {
         return 0;
     }
 
-    function supplyBalanceOf(address, address) external pure override returns (uint256) {
-        return 0;
+    /// @notice Returns the principal deposited for `token` (the mock accrues no interest,
+    ///         so shares are always 1:1 with the underlying — this mirrors a real
+    ///         `LendingPool.supplyBalanceOf` with `supplyIndex == WAD`).
+    function supplyBalanceOf(address, address token) external view override returns (uint256) {
+        return deposited[token];
     }
 
     function utilization(address) external pure override returns (uint256) {
