@@ -7,6 +7,12 @@ script = "script"
 solc = "0.8.24"
 optimizer = true
 optimizer_runs = 200
+# Allows script/Deploy.s.sol to write deployments/<network>.json at the repo root
+# (one level above this `contracts/` project root). `read-write` is required on
+# the parent directory `..` (not just `../deployments`) because `vm.createDir`
+# needs write access to the parent to create the `deployments/` directory itself
+# on first run.
+fs_permissions = [{ access = "read-write", path = ".." }]
 
 [fuzz]
 runs = 256

@@ -37,12 +37,38 @@ commitar. Projeto complexo: preferimos lento e correto a rápido e quebrado.
 - [x] **Setup**: 5 agents + 3 skills (user-level); monorepo Foundry + frontend;
       repo no GitHub (https://github.com/viniciusandradedev0/yieldpair);
       submódulos forge-std + OpenZeppelin; CI (forge fmt/build/test).
-- [x] **Fase 1 — AMM**: Passos 1.1–1.5 concluídos (TestToken, IPair/IFactory/IRouter,
-      AmmLibrary, Pair, Factory, Router — 42/42 testes verde, auditoria limpa).
-      Passo 1.6 (commit + push final) ← **AQUI**.
-- 🔄 **Fase 2 — LendingPool**: Passo 2.0 concluído (design aprovado). Passo 2.1 ← **AQUI**.
-- [ ] Fase 3 — Integração (idle-reserve sweeping)
-- [ ] Fase 4 — Frontend + deploy Sepolia
+- [x] **Fase 1 — AMM**: completa (TestToken, IPair/IFactory/IRouter, AmmLibrary, Pair,
+      Factory, Router). Testada e auditada.
+- [x] **Fase 2 — LendingPool**: completa (MockOracle, LendingPool: supply/borrow/
+      withdraw/repay/liquidate). Testada e auditada.
+- [x] **Fase 3 — Integração Pair↔LendingPool**: completa (idle-reserve sweeping via
+      `_sweepExcess`/`_ensureLiquidity`, `totalReserve = físico + supplied`). Testada
+      e auditada.
+- [x] **Auditoria final do sistema integrado**: executada em 2026-06-20
+      (`docs/security-audit-final.md`). Achado **H-1 (High)** — `Pair` cacheava
+      `supplied0/1` como principal estático, divergindo do saldo real do LendingPool
+      conforme `supplyIndex` cresce com juros (yield estranhado / risco de revert em
+      saques grandes) — foi **encontrado e CORRIGIDO** (commit `ab3ea59`): leitura
+      ao vivo via `_suppliedBalance(token)` → `ILendingPool.supplyBalanceOf`, validada
+      por `test/unit/IntegrationRealLendingPool.t.sol` contra um LendingPool real (não
+      mock). Re-auditoria: 0 Critical, 0 High; restam apenas Low/Info residuais.
+- [x] **Suite de testes**: **92/92 passando, 11 suites, 0 falhas** (`forge test`).
+- 🔄 **Fase 4 — Deploy + Frontend**:
+  - [x] Passo 4.1 — script de deploy (`contracts/script/Deploy.s.sol`), testado em
+        dry-run e em broadcast real.
+  - [x] Passo 4.2 — **deploy real na Sepolia, concluído**: os 7 contratos (mUSDC,
+        mWETH, Factory, Router, Pair, MockOracle, LendingPool) deployados e
+        **verificados no Etherscan**; endereços em `deployments/sepolia.json`; cenário
+        demo seedado (liquidez + posição de empréstimo com HF=2.5), confirmado
+        on-chain via `cast call`. Ver tabela de endereços no `README.md`.
+  - [ ] Passo 4.3 — scaffold do frontend (`web3-frontend`) ⏳ **PENDENTE ← AQUI**.
+  - [ ] Passo 4.4 — deploy do frontend (Vercel) + commit/push final ⏳ PENDENTE.
+
+> ⚠️ **Pendência de housekeeping antes do Passo 4.3**: os artefatos da Fase 4
+> (`contracts/script/`, `contracts/.env.example`, `contracts/foundry.toml` modificado,
+> `deployments/sepolia.json`, `contracts/broadcast/`) ainda estão **no working tree,
+> não commitados** (o fix do H-1 já foi commitado e pushed em `ab3ea59`). Decidir e
+> commitar isso é o primeiro passo de uma sessão nova antes de seguir para o frontend.
 
 ---
 
@@ -90,7 +116,7 @@ commitar. Projeto complexo: preferimos lento e correto a rápido e quebrado.
   Router para erro imediato; `AmmHandler.swap` atualizado para `amountOutMin = 1`.
 - Checkpoint: sem findings High/Critical em aberto. ✅
 
-**Passo 1.6 — commit + push da Fase 1.**
+**Passo 1.6 — commit + push da Fase 1.** ✅ **CONCLUÍDO**
 
 ---
 
@@ -101,27 +127,91 @@ Design completo em `docs/lending-design.md`. Decisões: multi-ativo único, juro
 linear por segundo (base 2%+slope 20%), HF 1e18-scaled, closeFactor 50%,
 liquidationBonus 1.08, MockOracle (1e18=$1), 10 invariantes para os testes.
 
-**Passo 2.1 — `solidity-engineer`: oráculo + LendingPool** ⏳ PENDENTE ← **AQUI**
-Implementar conforme `docs/lending-design.md`:
+**Passo 2.1 — `solidity-engineer`: oráculo + LendingPool** ✅ **CONCLUÍDO**
+Implementado conforme `docs/lending-design.md`:
 - `src/interfaces/IPriceOracle.sol`
 - `src/interfaces/ILendingPool.sol`
 - `src/oracle/MockOracle.sol`
 - `src/lending/LendingPool.sol`
-Checkpoint: `forge build` verde + `forge fmt`.
+Checkpoint: `forge build` verde + `forge fmt`. ✅
 
-**Passo 2.2 — `foundry-test-engineer`: testes do lending** ⏳ PENDENTE
-**Passo 2.3 — `defi-security-auditor`: auditoria do lending** ⏳ PENDENTE
-**Passo 2.4 — commit + push da Fase 2** ⏳ PENDENTE
+**Passo 2.2 — `foundry-test-engineer`: testes do lending** ✅ **CONCLUÍDO**
+**Passo 2.3 — `defi-security-auditor`: auditoria do lending** ✅ **CONCLUÍDO**
+**Passo 2.4 — commit + push da Fase 2** ✅ **CONCLUÍDO**
 
-## Fase 3 — Integração (resumo)
+---
+
+## Fase 3 — Integração ✅ **CONCLUÍDA**
 `Pair` com `lendingPool` + `bufferBps`; `totalReserve = saldo + supplied`;
 `_sweepExcess`/`_ensureLiquidity`. Invariantes de integração + trade-off de
-liquidez documentado no README.
+liquidez documentado no README. Testada (unit + invariant) e auditada junto com
+o sistema completo (ver `docs/security-audit-final.md`).
 
-## Fase 4 — Frontend + deploy (resumo)
-`web3-frontend`: scaffold Vite+wagmi+RainbowKit+Tailwind, UI de swap/liquidez/
-lending, painel de health factor e yield. Deploy via `script/Deploy.s.sol` na
-Sepolia; sync de ABIs/endereços; publicar na Vercel.
+---
+
+## Auditoria final do sistema integrado ✅ **CONCLUÍDA (com correção de High)**
+
+Executada em 2026-06-20 sobre o sistema completo (AMM + Oracle + Lending +
+integração + revisão leve do script de deploy). Relatório completo em
+`docs/security-audit-final.md`.
+
+- **H-1 (High) — encontrado e CORRIGIDO**: `Pair.sol` guardava `supplied0`/`supplied1`
+  como cache estático do principal varrido para o `LendingPool`. Como o `LendingPool`
+  credita `supplyShares` que crescem via `supplyIndex` (juros), o saldo real divergia
+  do cache estático, causando (a) yield que nunca chegava aos LPs, (b) risco de
+  underflow/revert em `_ensureLiquidity` em saques grandes, (c) yield órfão em
+  `_recallAll`. **Fix** (commit `ab3ea59`): eliminado o cache estático, substituído por
+  leitura ao vivo via `_suppliedBalance(token)` → `ILendingPool.supplyBalanceOf(address(this), token)`.
+  Validado por um teste novo dedicado contra um `LendingPool` **real** (com juros de
+  verdade, não o mock 1:1): `test/unit/IntegrationRealLendingPool.t.sol`.
+- **Re-auditoria pós-fix**: 0 Critical, 0 High. Restam apenas achados Low/Info
+  residuais (ex.: L-3, truncamento teórico de `uint112` acima de ~5.19e15 tokens —
+  fora de escopo prático para testnet/demo) e Medium operacionais já conhecidos
+  (M-2 Factory sem 2-step ownership, M-3 `setLendingPool` pode travar sob alta
+  utilização). Nenhum acima de Medium.
+- **Suite**: 92 testes, 0 falhas (`forge test --summary`).
+
+---
+
+## Fase 4 — Deploy + Frontend
+
+**Passo 4.1 — script de deploy** ✅ **CONCLUÍDO**
+- `contracts/script/Deploy.s.sol`: deploya TestToken×2, Factory, Router, Pair,
+  MockOracle, LendingPool; wiring completo (`setPairLendingPool`, `listMarket`,
+  `setPrice`); seed de liquidez inicial e de uma posição de empréstimo demo.
+- Testado em dry-run (`forge script ... `, sem `--broadcast`) e em broadcast real.
+
+**Passo 4.2 — deploy real na Sepolia** ✅ **CONCLUÍDO (2026-06-20)**
+- Todos os 7 contratos deployados e **verificados no Etherscan** (chainId `11155111`):
+  Deployer, mUSDC (`TestToken`), mWETH (`TestToken`), `Factory`, `Router`,
+  `Pair` (mUSDC/mWETH), `MockOracle`, `LendingPool`.
+- Endereços salvos em `deployments/sepolia.json`; tabela completa com links para o
+  Etherscan está em `README.md` (seção "Deploy (Sepolia)").
+- Cenário demo seedado: 3.000.000 mUSDC + 1.000 mWETH de liquidez inicial no par;
+  posição de empréstimo aberta (10 mWETH de colateral, 9.000 mUSDC emprestados,
+  health factor ≈ 2.5). Confirmado on-chain via `cast call` (`getReserves`,
+  `suppliedReserves`, `healthFactor` todos batendo com o esperado).
+- **Pendência de housekeeping**: os artefatos desse passo (`contracts/script/`,
+  `contracts/.env.example`, `contracts/foundry.toml` modificado,
+  `deployments/sepolia.json`, `contracts/broadcast/`) estão no working tree mas
+  **ainda não foram commitados** — decisão humana pendente (ver nota na seção
+  "Status atual" acima). O fix do H-1 já foi commitado e pushed separadamente
+  (`ab3ea59`, em `origin/desenvolvimento`).
+
+**Passo 4.3 — `web3-frontend`: scaffold do dapp** ⏳ **PENDENTE ← AQUI (próximo passo)**
+- `frontend/` está vazio (só README). Scaffold Vite + React + TypeScript + wagmi +
+  viem + RainbowKit + Tailwind 4.
+- Conectar carteira (Sepolia); ler/escrever nos 7 contratos deployados (endereços
+  em `deployments/sepolia.json`).
+- UI mínima: swap, add/remove liquidez, supply/borrow/withdraw/repay no lending,
+  painel de health factor e de yield acumulado pelo par.
+- Checkpoint: `npm run build` + lint verdes; testado manualmente contra a Sepolia
+  com os contratos já deployados (não precisa de novo deploy).
+
+**Passo 4.4 — deploy do frontend (Vercel) + commit/push final** ⏳ **PENDENTE**
+- Publicar o frontend na Vercel.
+- Commit final consolidando os artefatos pendentes da Fase 4 (script, addresses,
+  broadcast) — decisão humana sobre o que entra no commit e quando.
 
 ---
 

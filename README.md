@@ -26,7 +26,7 @@ implementado do zero para fins de estudo.
 | 1 | **AMM** Uniswap V2-style: `Factory` / `Pair` (`x*y=k`) / `Router` + tokens de teste | ✅ completa |
 | 2 | **LendingPool** Aave-style: supply/borrow/withdraw/repay, juros por índice, health factor, liquidação | ✅ completa |
 | 3 | **Integração**: a reserva ociosa do `Pair` é emprestada no `LendingPool` (yield aos LPs) | ✅ completa |
-| 4 | **Frontend** (React + wagmi) + deploy na Sepolia | ⬜ |
+| 4 | **Frontend** (React + wagmi) + deploy na Sepolia | 🔄 deploy na Sepolia ✅ feito (7/7 contratos verificados) · frontend ⬜ pendente |
 
 ## Contratos implementados
 
@@ -75,9 +75,31 @@ deployments/ # endereços por rede
 ```bash
 cd contracts
 forge build
-forge test   # 91 testes: unit + fuzz + invariant (Fases 1–3)
+forge test   # 92 testes: unit + fuzz + invariant (Fases 1–3)
 forge fmt --check
 ```
+
+## Deploy (Sepolia)
+
+Sistema completo deployado e verificado na Sepolia testnet (chainId `11155111`) via
+`contracts/script/Deploy.s.sol`. Endereços também salvos em `deployments/sepolia.json`.
+
+| Contrato | Endereço | Etherscan |
+|----------|----------|-----------|
+| Deployer | `0xec91D2A97dD70fb2ff9C651775a1bfe6639D9411` | [link](https://sepolia.etherscan.io/address/0xec91D2A97dD70fb2ff9C651775a1bfe6639D9411) |
+| mUSDC (`TestToken`) | `0x4CF16121615C0F4bBC94De15A9CcbaaBC9f623F4` | [link](https://sepolia.etherscan.io/address/0x4CF16121615C0F4bBC94De15A9CcbaaBC9f623F4) |
+| mWETH (`TestToken`) | `0xBE1A157e0dDEfA130E183bEFc6aE81BcCd1a9112` | [link](https://sepolia.etherscan.io/address/0xBE1A157e0dDEfA130E183bEFc6aE81BcCd1a9112) |
+| `Factory` | `0x803B5d9EbA385383025ad07856B059201F202Fd0` | [link](https://sepolia.etherscan.io/address/0x803B5d9EbA385383025ad07856B059201F202Fd0) |
+| `Router` | `0x14E0ceAFd363e63CEEA412D1C47d57A0F8A963d6` | [link](https://sepolia.etherscan.io/address/0x14E0ceAFd363e63CEEA412D1C47d57A0F8A963d6) |
+| `Pair` (mUSDC/mWETH) | `0xd3e6b9784A0edCE80451979dCF1457ABBd1B33b2` | [link](https://sepolia.etherscan.io/address/0xd3e6b9784A0edCE80451979dCF1457ABBd1B33b2) |
+| `MockOracle` | `0xEf52E7129593C1b4531479780B8892C102526B60` | [link](https://sepolia.etherscan.io/address/0xEf52E7129593C1b4531479780B8892C102526B60) |
+| `LendingPool` | `0x14Bcb5Ebc00b4D023FB71B4BA60413FbcB24d31c` | [link](https://sepolia.etherscan.io/address/0x14Bcb5Ebc00b4D023FB71B4BA60413FbcB24d31c) |
+
+Todos os 7 contratos foram **verificados com sucesso no Etherscan** (source + ABI públicos).
+O script de deploy também seedou um cenário de demonstração: liquidez inicial de
+3.000.000 mUSDC + 1.000 mWETH no par, e uma posição de empréstimo aberta (10 mWETH de
+colateral, 9.000 mUSDC emprestados, health factor ≈ **2.5**) — confirmada on-chain via
+`cast call` (`getReserves`, `suppliedReserves`, `healthFactor`).
 
 ## Decisões de design e segurança
 
@@ -165,6 +187,17 @@ uint256 got = IERC20(token).balanceOf(address(this)) - before;
 ```
 
 Isso torna o `Pair` robusto a qualquer implementação de lending pool, independente do modelo de arredondamento.
+
+#### Achado de auditoria H-1 (encontrado e corrigido)
+
+A auditoria final encontrou um **High**: o `Pair` rastreava `supplied0/1` como um cache
+estático do principal varrido para o `LendingPool`, mas o pool credita shares que crescem
+via `supplyIndex` (juros) — então o cache divergia do saldo real, causando yield que nunca
+chegava aos LPs e risco de revert em saques grandes. Fix: eliminado o cache estático,
+substituído por uma leitura **ao vivo** via `_suppliedBalance(token)` →
+`ILendingPool.supplyBalanceOf(address(this), token)`, validada por um teste dedicado contra
+um `LendingPool` real (com juros de verdade, não o mock 1:1). Detalhes completos —
+mecanismo, exploit passo a passo e verificação — em `docs/security-audit-final.md`.
 
 ---
 
