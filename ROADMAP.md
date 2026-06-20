@@ -61,14 +61,13 @@ commitar. Projeto complexo: preferimos lento e correto a rápido e quebrado.
         **verificados no Etherscan**; endereços em `deployments/sepolia.json`; cenário
         demo seedado (liquidez + posição de empréstimo com HF=2.5), confirmado
         on-chain via `cast call`. Ver tabela de endereços no `README.md`.
-  - [ ] Passo 4.3 — scaffold do frontend (`web3-frontend`) ⏳ **PENDENTE ← AQUI**.
-  - [ ] Passo 4.4 — deploy do frontend (Vercel) + commit/push final ⏳ PENDENTE.
-
-> ⚠️ **Pendência de housekeeping antes do Passo 4.3**: os artefatos da Fase 4
-> (`contracts/script/`, `contracts/.env.example`, `contracts/foundry.toml` modificado,
-> `deployments/sepolia.json`, `contracts/broadcast/`) ainda estão **no working tree,
-> não commitados** (o fix do H-1 já foi commitado e pushed em `ab3ea59`). Decidir e
-> commitar isso é o primeiro passo de uma sessão nova antes de seguir para o frontend.
+  - [x] Passo 4.3 — **scaffold do frontend concluído** (`web3-frontend`): dapp Vite +
+        React + TypeScript + wagmi v2 + viem + RainbowKit + Tailwind em `frontend/`;
+        telas Swap / Liquidez / Lending / Painel (Health Factor + yield + `suppliedReserves`);
+        ABIs gerados de `contracts/out/` via `npm run gen:abis`, endereços de
+        `deployments/sepolia.json`. `npm run build` + `npm run lint` verdes (37/37 testes
+        de lógica pura no Vitest).
+  - [ ] Passo 4.4 — deploy do frontend (Vercel) + commit/push final ⏳ **PENDENTE ← AQUI**.
 
 ---
 
@@ -191,27 +190,34 @@ integração + revisão leve do script de deploy). Relatório completo em
   posição de empréstimo aberta (10 mWETH de colateral, 9.000 mUSDC emprestados,
   health factor ≈ 2.5). Confirmado on-chain via `cast call` (`getReserves`,
   `suppliedReserves`, `healthFactor` todos batendo com o esperado).
-- **Pendência de housekeeping**: os artefatos desse passo (`contracts/script/`,
-  `contracts/.env.example`, `contracts/foundry.toml` modificado,
-  `deployments/sepolia.json`, `contracts/broadcast/`) estão no working tree mas
-  **ainda não foram commitados** — decisão humana pendente (ver nota na seção
-  "Status atual" acima). O fix do H-1 já foi commitado e pushed separadamente
-  (`ab3ea59`, em `origin/desenvolvimento`).
+- Artefatos do deploy (`contracts/script/`, `contracts/.env.example`,
+  `contracts/foundry.toml`, `deployments/sepolia.json`, `contracts/broadcast/`)
+  commitados e pushed em `c53cfd5`. O fix do H-1 já havia sido commitado/pushed
+  separadamente (`ab3ea59`).
 
-**Passo 4.3 — `web3-frontend`: scaffold do dapp** ⏳ **PENDENTE ← AQUI (próximo passo)**
-- `frontend/` está vazio (só README). Scaffold Vite + React + TypeScript + wagmi +
-  viem + RainbowKit + Tailwind 4.
-- Conectar carteira (Sepolia); ler/escrever nos 7 contratos deployados (endereços
-  em `deployments/sepolia.json`).
-- UI mínima: swap, add/remove liquidez, supply/borrow/withdraw/repay no lending,
-  painel de health factor e de yield acumulado pelo par.
-- Checkpoint: `npm run build` + lint verdes; testado manualmente contra a Sepolia
-  com os contratos já deployados (não precisa de novo deploy).
+**Passo 4.3 — `web3-frontend`: scaffold do dapp** ✅ **CONCLUÍDO**
+- Dapp em `frontend/`: Vite + React 18 + TypeScript + wagmi v2 + viem + RainbowKit 2.2
+  + Tailwind 4, configurado para a Sepolia (chainId 11155111).
+- ABIs gerados de `contracts/out/<Nome>.sol/<Nome>.json` via `npm run gen:abis`
+  (`scripts/gen-abis.mjs`, sem deps) → `src/abis/`; endereços lidos de
+  `deployments/sepolia.json` → `src/config/deployments.sepolia.ts`. Não há ABI/endereço
+  redigitado à mão.
+- Telas: **Swap** (slippage + deadline + price impact), **Liquidez** (add/remove +
+  approvals), **Lending** (supply/withdraw/borrow/repay + `utilization`), **Painel**
+  (Health Factor com cores, yield estimado, `suppliedReserves` do Pair). Faucet
+  (`TestToken.mint`), UX de tx (pending/success/error + link Etherscan), banner de rede
+  errada.
+- Checkpoint: `npm run gen:abis` + `npm run build` + `npm run lint` verdes; 37/37 testes
+  de lógica pura no Vitest (`errors`/`format`/`swap`, sem mock de wagmi). Roda contra os
+  contratos já deployados na Sepolia (não precisa de novo deploy).
+- `VITE_WALLETCONNECT_PROJECT_ID` fica vazio no `.env.example` (placeholder); o valor real
+  é definido na Vercel no Passo 4.4. Sem ele, MetaMask/injected funcionam; só o connector
+  WalletConnect (QR/mobile) fica inativo.
 
-**Passo 4.4 — deploy do frontend (Vercel) + commit/push final** ⏳ **PENDENTE**
-- Publicar o frontend na Vercel.
-- Commit final consolidando os artefatos pendentes da Fase 4 (script, addresses,
-  broadcast) — decisão humana sobre o que entra no commit e quando.
+**Passo 4.4 — deploy do frontend (Vercel) + commit/push final** ⏳ **PENDENTE ← AQUI**
+- Publicar o frontend na Vercel (framework Vite, build `npm run build`, output `dist`,
+  root `frontend/`); definir `VITE_WALLETCONNECT_PROJECT_ID` (e RPC opcional) no painel.
+- Atualizar o `README.md` com o link do dapp publicado.
 
 ---
 

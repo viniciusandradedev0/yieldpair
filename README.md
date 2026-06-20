@@ -26,7 +26,7 @@ implementado do zero para fins de estudo.
 | 1 | **AMM** Uniswap V2-style: `Factory` / `Pair` (`x*y=k`) / `Router` + tokens de teste | ✅ completa |
 | 2 | **LendingPool** Aave-style: supply/borrow/withdraw/repay, juros por índice, health factor, liquidação | ✅ completa |
 | 3 | **Integração**: a reserva ociosa do `Pair` é emprestada no `LendingPool` (yield aos LPs) | ✅ completa |
-| 4 | **Frontend** (React + wagmi) + deploy na Sepolia | 🔄 deploy na Sepolia ✅ feito (7/7 contratos verificados) · frontend ⬜ pendente |
+| 4 | **Frontend** (React + wagmi) + deploy na Sepolia | 🔄 deploy na Sepolia ✅ feito (7/7 contratos verificados) · frontend ✅ scaffold pronto (Swap/Liquidez/Lending/Painel HF) · deploy Vercel ⬜ pendente |
 
 ## Contratos implementados
 
