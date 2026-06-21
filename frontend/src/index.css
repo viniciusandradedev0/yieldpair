@@ -17,11 +17,84 @@ body {
   min-width: 320px;
   min-height: 100vh;
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  background-color: #0b1120;
+  background-color: #05070f;
   color: #e2e8f0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- web3 ambient background (fixed glow orbs behind a subtle grid) ---- */
+.yp-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background:
+    radial-gradient(60rem 60rem at 12% -10%, rgba(16, 185, 129, 0.16), transparent 60%),
+    radial-gradient(50rem 50rem at 100% 0%, rgba(99, 102, 241, 0.16), transparent 55%),
+    radial-gradient(60rem 60rem at 50% 120%, rgba(14, 165, 233, 0.14), transparent 60%),
+    #05070f;
+}
+.yp-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.045) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 100%);
+}
+.yp-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(70px);
+  opacity: 0.5;
+  animation: yp-float 16s ease-in-out infinite;
+}
+
+@keyframes yp-float {
+  0%, 100% { transform: translateY(0) translateX(0); }
+  50% { transform: translateY(-24px) translateX(16px); }
+}
+
+/* ---- glass card ---- */
+.yp-card {
+  position: relative;
+  border-radius: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.5), rgba(15, 23, 42, 0.5));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow:
+    0 18px 40px -22px rgba(0, 0, 0, 0.75),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* ---- gradient text + buttons ---- */
+.yp-gradient-text {
+  background-image: linear-gradient(135deg, #34d399, #38bdf8 55%, #818cf8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.yp-btn-primary {
+  background-image: linear-gradient(135deg, #10b981, #0ea5e9);
+}
+.yp-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.yp-btn-accent {
+  background-image: linear-gradient(135deg, #6366f1, #0ea5e9);
+}
+.yp-btn-accent:hover:not(:disabled) {
+  filter: brightness(1.08);
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .yp-orb {
+    animation: none;
+  }
   *,
   *::before,
   *::after {

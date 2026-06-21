@@ -2,6 +2,7 @@ import { useAccount, useReadContract } from "wagmi";
 import { LendingPoolAbi, PairAbi } from "../abis";
 import { CONTRACTS, TOKENS } from "../config/contracts";
 import { estimateSupplyApr, formatPercent, formatTokenAmount, interpretHealthFactor } from "../lib/format";
+import { TokenIcon } from "./TokenIcon";
 
 const STATUS_STYLES: Record<string, string> = {
   healthy: "text-emerald-400 border-emerald-500/40 bg-emerald-500/10",
@@ -76,7 +77,7 @@ export function Dashboard() {
   );
 
   return (
-    <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
+    <div className="yp-card p-4 sm:p-6">
       <h2 className="text-lg font-semibold text-slate-100">Painel</h2>
 
       <div className="mt-4">
@@ -98,12 +99,12 @@ export function Dashboard() {
         </p>
         <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
           <StatCard
-            label={TOKENS.mUSDC.symbol}
+            symbol={TOKENS.mUSDC.symbol}
             value={`${formatTokenAmount(supplied0, TOKENS.mUSDC.decimals, 2)}`}
             sub={`APR estimada para suppliers: ${formatPercent(supplyAprUsdc)}`}
           />
           <StatCard
-            label={TOKENS.mWETH.symbol}
+            symbol={TOKENS.mWETH.symbol}
             value={`${formatTokenAmount(supplied1, TOKENS.mWETH.decimals, 4)}`}
             sub={`APR estimada para suppliers: ${formatPercent(supplyAprWeth)}`}
           />
@@ -118,11 +119,14 @@ export function Dashboard() {
   );
 }
 
-function StatCard({ label, value, sub }: { label: string; value: string; sub: string }) {
+function StatCard({ symbol, value, sub }: { symbol: string; value: string; sub: string }) {
   return (
-    <div className="rounded-lg bg-slate-800/60 p-3">
-      <p className="text-slate-500">{label}</p>
-      <p className="text-lg font-semibold text-slate-100">{value}</p>
+    <div className="rounded-xl border border-white/5 bg-slate-900/40 p-3">
+      <div className="flex items-center gap-2">
+        <TokenIcon symbol={symbol} size={24} />
+        <p className="font-medium text-slate-300">{symbol}</p>
+      </div>
+      <p className="mt-1.5 text-lg font-semibold text-slate-100">{value}</p>
       <p className="mt-1 text-[11px] text-slate-500">{sub}</p>
     </div>
   );
