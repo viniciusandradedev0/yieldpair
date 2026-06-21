@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applySlippage, deadlineFromNow, estimatePriceImpact } from "./swap";
+import { applySlippage, deadlineFromNow, estimatePriceImpact, quotePaired } from "./swap";
 
 describe("applySlippage", () => {
   it("reduces the amount by the given bps, rounding down", () => {
@@ -28,6 +28,31 @@ describe("deadlineFromNow", () => {
     const expectedMin = BigInt(before + 20 * 60 - 2);
     const expectedMax = BigInt(before + 20 * 60 + 2);
     expect(deadline >= expectedMin && deadline <= expectedMax).toBe(true);
+  });
+});
+
+describe("quotePaired", () => {
+  it("keeps the pool ratio (amountIn * reserveOut / reserveIn)", () => {
+    // pool ~3001 mUSDC : 1 mWETH (the real Sepolia seed)
+    const reserveUsdc = 3_000_500n * 10n ** 18n;
+    const reserveWeth = 1_000n * 10n ** 18n;
+    // 3001 mUSDC should pair with ~1 mWETH
+    const out = quotePaired(3001n * 10n ** 18n, reserveUsdc, reserveWeth);
+    expect(out).toBeGreaterThan(99n * 10n ** 16n); // > 0.99 mWETH
+    expect(out).toBeLessThanOrEqual(101n * 10n ** 16n); // <= 1.01 mWETH
+  });
+
+  it("is symmetric back to the original ratio", () => {
+    const reserveA = 4_000n * 10n ** 18n;
+    const reserveB = 1_000n * 10n ** 18n;
+    // 1:4 pool → 400 A pairs with 100 B
+    expect(quotePaired(400n * 10n ** 18n, reserveA, reserveB)).toBe(100n * 10n ** 18n);
+  });
+
+  it("returns 0 for empty reserves or zero input", () => {
+    expect(quotePaired(0n, 1n, 1n)).toBe(0n);
+    expect(quotePaired(1n, 0n, 1n)).toBe(0n);
+    expect(quotePaired(1n, 1n, 0n)).toBe(0n);
   });
 });
 
