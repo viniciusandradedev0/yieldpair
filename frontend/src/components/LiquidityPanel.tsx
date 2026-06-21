@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { parseUnits } from "viem";
+import { formatUnits, parseUnits } from "viem";
 import { useAccount, useReadContract } from "wagmi";
 import { PairAbi, RouterAbi, TestTokenAbi } from "../abis";
 import { CONTRACTS, TOKENS } from "../config/contracts";
 import { useContractAction } from "../hooks/useContractAction";
 import { useTokenAllowance, useTokenBalance } from "../hooks/useErc20";
-import { applySlippage, deadlineFromNow } from "../lib/swap";
+import { applySlippage, deadlineFromNow, quotePaired } from "../lib/swap";
 import { formatTokenAmount } from "../lib/format";
 import { TxStatus } from "./TxStatus";
 
@@ -71,6 +71,32 @@ export function LiquidityPanel() {
   const needsApprovalA = amountA > 0n && allowanceA < amountA;
   const needsApprovalB = amountB > 0n && allowanceB < amountB;
 
+  // getReserves() returns (reserve0, reserve1) for token0/token1, which are
+  // sorted by address — map them back to tokenA/tokenB before quoting.
+  const [reserve0, reserve1] = (reservesQuery.data as
+    | readonly [bigint, bigint, number]
+    | undefined) ?? [0n, 0n, 0];
+  const token0IsTokenA = tokenA.address.toLowerCase() < tokenB.address.toLowerCase();
+  const reserveA = token0IsTokenA ? reserve0 : reserve1;
+  const reserveB = token0IsTokenA ? reserve1 : reserve0;
+  const hasReserves = reserveA > 0n && reserveB > 0n;
+
+  // Auto-pair the counterpart field by the pool ratio so the deposit always
+  // matches it — otherwise addLiquidity reverts INSUFFICIENT_*_AMOUNT.
+  function handleAmountAChange(value: string) {
+    setAmountAStr(value);
+    if (!hasReserves) return;
+    const parsed = safeParseUnits(value, tokenA.decimals);
+    setAmountBStr(parsed > 0n ? formatUnits(quotePaired(parsed, reserveA, reserveB), tokenB.decimals) : "");
+  }
+
+  function handleAmountBChange(value: string) {
+    setAmountBStr(value);
+    if (!hasReserves) return;
+    const parsed = safeParseUnits(value, tokenB.decimals);
+    setAmountAStr(parsed > 0n ? formatUnits(quotePaired(parsed, reserveB, reserveA), tokenA.decimals) : "");
+  }
+
   function handleApprove(token: typeof tokenA, amount: bigint, action: typeof approveAAction) {
     action.reset();
     action.writeContract({
@@ -124,10 +150,6 @@ export function LiquidityPanel() {
   const balanceB = (balanceBQuery.data as bigint | undefined) ?? 0n;
   const lpBalance = (lpBalanceQuery.data as bigint | undefined) ?? 0n;
 
-  const [reserve0, reserve1] = (reservesQuery.data as
-    | readonly [bigint, bigint, number]
-    | undefined) ?? [0n, 0n, 0];
-
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
       <div className="flex items-center justify-between">
@@ -151,8 +173,8 @@ export function LiquidityPanel() {
       </div>
 
       <p className="mt-2 text-xs text-slate-400">
-        Reservas do par: {formatTokenAmount(reserve0, 18, 2)} {tokenA.symbol} /{" "}
-        {formatTokenAmount(reserve1, 18, 2)} {tokenB.symbol}
+        Reservas do par: {formatTokenAmount(reserveA, tokenA.decimals, 2)} {tokenA.symbol} /{" "}
+        {formatTokenAmount(reserveB, tokenB.decimals, 2)} {tokenB.symbol}
       </p>
 
       {mode === "add" ? (
@@ -160,7 +182,7 @@ export function LiquidityPanel() {
           <AmountInput
             label={`Quantidade de ${tokenA.symbol}`}
             value={amountAStr}
-            onChange={setAmountAStr}
+            onChange={handleAmountAChange}
             balance={balanceA}
             decimals={tokenA.decimals}
             symbol={tokenA.symbol}
@@ -168,11 +190,17 @@ export function LiquidityPanel() {
           <AmountInput
             label={`Quantidade de ${tokenB.symbol}`}
             value={amountBStr}
-            onChange={setAmountBStr}
+            onChange={handleAmountBChange}
             balance={balanceB}
             decimals={tokenB.decimals}
             symbol={tokenB.symbol}
           />
+
+          {hasReserves && (
+            <p className="text-xs text-slate-500">
+              Os valores são pareados automaticamente pela proporção atual do pool.
+            </p>
+          )}
 
           {!isConnected && <p className="text-center text-sm text-slate-400">Conecte sua carteira para continuar.</p>}
 

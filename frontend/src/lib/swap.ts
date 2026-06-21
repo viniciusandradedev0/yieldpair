@@ -53,5 +53,22 @@ export function estimatePriceImpact(
   return Number(impactScaled) / Number(SCALE);
 }
 
+/**
+ * Mirrors the on-chain `AmmLibrary.quote`: given an amount of one token and the
+ * pool reserves, returns the amount of the *other* token that keeps the pool
+ * ratio constant (`amountB = amountIn * reserveOut / reserveIn`, floored).
+ *
+ * Used by the liquidity panel to auto-fill the paired field so the deposit
+ * always matches the pool ratio — otherwise the Router reverts with
+ * INSUFFICIENT_*_AMOUNT when the min-amounts (derived from the typed values)
+ * exceed the ratio-optimal counterpart.
+ *
+ * Returns 0 when reserves are empty or the input is 0.
+ */
+export function quotePaired(amountIn: bigint, reserveIn: bigint, reserveOut: bigint): bigint {
+  if (amountIn <= 0n || reserveIn <= 0n || reserveOut <= 0n) return 0n;
+  return (amountIn * reserveOut) / reserveIn;
+}
+
 /** Common slippage presets shown in the swap UI, in basis points. */
 export const SLIPPAGE_PRESETS_BPS = [10, 50, 100] as const;
