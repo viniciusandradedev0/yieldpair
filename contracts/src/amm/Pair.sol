@@ -27,7 +27,7 @@ import { ILendingPool } from "../interfaces/ILendingPool.sol";
 ///      subsequent `mint`/`burn` calls.
 ///
 /// @dev AMM-only compatibility: when `lendingPool == address(0)` (the default),
-///      `supplied0 == supplied1 == 0` always, `getReserves()` returns the physical
+///      `_suppliedBalance` always returns 0, `getReserves()` returns the physical
 ///      reserves unchanged, and all lending helper functions return immediately —
 ///      behaviour is identical to the original Uniswap V2 Pair.
 ///
@@ -106,14 +106,6 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
     /// @inheritdoc IPair
     uint16 public bufferBps;
 
-    /// @dev Principal of token0 currently supplied to `lendingPool` (NOT shares).
-    ///      Packed with supplied1 into one slot.
-    uint112 private supplied0;
-
-    /// @dev Principal of token1 currently supplied to `lendingPool` (NOT shares).
-    ///      Packed with supplied0 into one slot.
-    uint112 private supplied1;
-
     // -------------------------------------------------------------------------
     // Storage — TWAP / fee accounting
     // -------------------------------------------------------------------------
@@ -177,14 +169,16 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
         view
         returns (uint112 reserve0_, uint112 reserve1_, uint32 blockTimestampLast_)
     {
-        reserve0_ = reserve0 + supplied0;
-        reserve1_ = reserve1 + supplied1;
+        reserve0_ = reserve0 + _suppliedBalance(token0);
+        reserve1_ = reserve1 + _suppliedBalance(token1);
         blockTimestampLast_ = blockTimestampLast;
     }
 
     /// @inheritdoc IPair
+    /// @dev Live read from `lendingPool` — reflects the actual supplied balance,
+    ///      including any interest accrued since the last sweep/recall.
     function suppliedReserves() external view returns (uint112 s0, uint112 s1) {
-        return (supplied0, supplied1);
+        return (_suppliedBalance(token0), _suppliedBalance(token1));
     }
 
     // -------------------------------------------------------------------------
@@ -235,12 +229,16 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
 
         // _update records physical balance as reserve; totalReserve args drive TWAP.
         _update(balance0, balance1, totalReserve0_, totalReserve1_);
-        kLast = uint256(reserve0 + supplied0) * (reserve1 + supplied1);
+        kLast = uint256(reserve0 + _suppliedBalance(token0)) * (reserve1 + _suppliedBalance(token1));
 
         // Sweep any idle liquidity above the buffer into the lending pool.
         if (lendingPool != address(0)) {
-            _sweepExcess(token0, IERC20(token0).balanceOf(address(this)), reserve0 + supplied0);
-            _sweepExcess(token1, IERC20(token1).balanceOf(address(this)), reserve1 + supplied1);
+            _sweepExcess(
+                token0, IERC20(token0).balanceOf(address(this)), reserve0 + _suppliedBalance(token0)
+            );
+            _sweepExcess(
+                token1, IERC20(token1).balanceOf(address(this)), reserve1 + _suppliedBalance(token1)
+            );
         }
 
         emit Mint(msg.sender, amount0, amount1);
@@ -284,7 +282,7 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
         uint256 balance1 = IERC20(token1_).balanceOf(address(this)) - amount1;
 
         _update(balance0, balance1, totalReserve0_, totalReserve1_);
-        kLast = uint256(reserve0 + supplied0) * (reserve1 + supplied1);
+        kLast = uint256(reserve0 + _suppliedBalance(token0)) * (reserve1 + _suppliedBalance(token1));
 
         // Interactions: transfer tokens to recipient.
         IERC20(token0_).safeTransfer(to, amount0);
@@ -357,8 +355,8 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
         uint256 balance1 = IERC20(token1).balanceOf(address(this));
 
         (amount0In, amount1In) = _settleSwap(
-            balance0 + supplied0,
-            balance1 + supplied1,
+            balance0 + _suppliedBalance(token0),
+            balance1 + _suppliedBalance(token1),
             amount0Out,
             amount1Out,
             totalReserve0_,
@@ -368,15 +366,20 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
         _update(balance0, balance1, totalReserve0_, totalReserve1_);
 
         if (lendingPool != address(0)) {
-            _sweepExcess(token0, IERC20(token0).balanceOf(address(this)), reserve0 + supplied0);
-            _sweepExcess(token1, IERC20(token1).balanceOf(address(this)), reserve1 + supplied1);
+            _sweepExcess(
+                token0, IERC20(token0).balanceOf(address(this)), reserve0 + _suppliedBalance(token0)
+            );
+            _sweepExcess(
+                token1, IERC20(token1).balanceOf(address(this)), reserve1 + _suppliedBalance(token1)
+            );
         }
     }
 
     /// @inheritdoc IPair
     /// @dev Sends any token balance in excess of the stored PHYSICAL reserves to `to`.
     ///      Useful for recovering tokens sent directly to the pair by mistake.
-    ///      `supplied_i` tokens are NOT considered excess — they are intentionally absent.
+    ///      Tokens supplied to `lendingPool` are NOT considered excess — they are
+    ///      intentionally absent from this contract's physical balance.
     function skim(address to) external nonReentrant {
         address token0_ = token0;
         address token1_ = token1;
@@ -392,7 +395,8 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
 
     /// @inheritdoc IPair
     /// @dev Forces stored PHYSICAL reserves to match actual token balances.
-    ///      `supplied_i` is NOT altered — it remains as the lending pool principal.
+    ///      The supplied balance is unaffected — it is read live from `lendingPool` and
+    ///      is not a locally stored field.
     ///      `Sync` emits with TOTAL reserves (physical + supplied) for consistency.
     function sync() external nonReentrant {
         (uint112 totalReserve0_, uint112 totalReserve1_,) = getReserves();
@@ -460,7 +464,7 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
 
         // Emit Sync with TOTAL reserves (physical + supplied) so external consumers
         // always see the full economic reserve.
-        emit Sync(reserve0 + supplied0, reserve1 + supplied1);
+        emit Sync(reserve0 + _suppliedBalance(token0), reserve1 + _suppliedBalance(token1));
     }
 
     /// @dev Computes the input amounts implied by the total-balance/total-reserve delta and
@@ -501,11 +505,13 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
     /// @dev Sweeps idle physical liquidity above the buffer threshold into the lending pool.
     ///      No-op when `lendingPool == address(0)` (checked by caller).
     ///
-    ///      CEI note: state mutations (`reserve_i -= excess`, `supplied_i += excess`) happen
-    ///      AFTER the external `supply` call returns. Re-entry into this Pair is prevented by
-    ///      the `nonReentrant` guard on the calling function (`mint`/`swap`). The `lendingPool`
-    ///      is expected to be a trusted, audited contract; a malicious pool could observe
-    ///      transiently inconsistent reserves during the `supply` call.
+    ///      CEI note: the state mutation (`reserve_i -= excess`) happens AFTER the external
+    ///      `supply` call returns. Re-entry into this Pair is prevented by the `nonReentrant`
+    ///      guard on the calling function (`mint`/`swap`). The `lendingPool` is expected to be
+    ///      a trusted, audited contract; a malicious pool could observe transiently
+    ///      inconsistent reserves during the `supply` call. There is no `supplied_i` field to
+    ///      update — the supplied balance is read live from `lendingPool` via
+    ///      `_suppliedBalance`, so it reflects this sweep automatically on the next read.
     ///      Rounding: `targetLiquid` rounds UP (ceiling) so the buffer is slightly
     ///      over-reserved — this rounds against deploying funds to yield, which is
     ///      conservative and safe for the pool.
@@ -525,13 +531,12 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
         IERC20(token).forceApprove(lendingPool, excess);
         ILendingPool(lendingPool).supply(token, excess);
 
-        // Update bookkeeping: move `excess` from physical reserve to supplied.
+        // Update bookkeeping: physical reserve shrinks by `excess`; the supplied side is
+        // tracked live by the lending pool itself, not by a local field.
         if (token == token0) {
             reserve0 -= uint112(excess);
-            supplied0 += uint112(excess);
         } else {
             reserve1 -= uint112(excess);
-            supplied1 += uint112(excess);
         }
         emit Sweep(token, excess);
     }
@@ -542,9 +547,11 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
     ///      (e.g. lending pool has insufficient cash).
     ///      No-op (returns true) when `lendingPool == address(0)`.
     ///
-    ///      CEI note: bookkeeping (`reserve_i`, `supplied_i`) is updated inside the
-    ///      `try` block immediately after the `withdraw` returns — the external call
-    ///      and its state effects are atomic within this helper's execution.
+    ///      CEI note: bookkeeping (`reserve_i`) is updated inside the `try` block
+    ///      immediately after the `withdraw` returns — the external call and its state
+    ///      effects are atomic within this helper's execution. There is no `supplied_i`
+    ///      field to update — the supplied balance is read live from `lendingPool` via
+    ///      `_suppliedBalance`, so it reflects this recall automatically on the next read.
     ///
     /// @param token     Token to ensure (token0 or token1).
     /// @param amountOut Amount that must be physically available.
@@ -561,10 +568,8 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
             uint256 got = IERC20(token).balanceOf(address(this)) - before;
             if (token == token0) {
                 reserve0 += uint112(got);
-                supplied0 -= uint112(got);
             } else {
                 reserve1 += uint112(got);
-                supplied1 -= uint112(got);
             }
             emit Recall(token, got);
             // Return true only if we received enough to cover the required output.
@@ -577,14 +582,17 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
     /// @dev Recalls ALL supplied funds from the current lending pool.
     ///      Called by `setLendingPool` before switching or disabling the lending pool.
     ///      Reverts with `CannotRecall` if any withdrawal fails or delivers less than
-    ///      the full principal (any shortfall means we cannot safely switch pools).
+    ///      the full live-supplied balance (any shortfall means we cannot safely switch
+    ///      pools). Withdrawing the live balance (rather than a stale static principal)
+    ///      ensures any interest accrued while supplied is recalled too, instead of being
+    ///      orphaned inside the old `lendingPool`.
     ///      No-op when `lendingPool == address(0)` or no funds are supplied.
     function _recallAll() private {
         address pool = lendingPool;
         if (pool == address(0)) return;
 
-        uint112 s0 = supplied0;
-        uint112 s1 = supplied1;
+        uint112 s0 = _suppliedBalance(token0);
+        uint112 s1 = _suppliedBalance(token1);
 
         if (s0 > 0) {
             uint256 before0 = IERC20(token0).balanceOf(address(this));
@@ -593,7 +601,6 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
                 // Require exact recall — any shortfall means we cannot safely switch pools.
                 if (got0 < s0) revert CannotRecall();
                 reserve0 += uint112(got0);
-                supplied0 = 0;
                 emit Recall(token0, got0);
             } catch {
                 revert CannotRecall();
@@ -606,11 +613,21 @@ contract Pair is ERC20, ReentrancyGuard, IPair {
                 uint256 got1 = IERC20(token1).balanceOf(address(this)) - before1;
                 if (got1 < s1) revert CannotRecall();
                 reserve1 += uint112(got1);
-                supplied1 = 0;
                 emit Recall(token1, got1);
             } catch {
                 revert CannotRecall();
             }
         }
+    }
+
+    /// @dev Live balance the Pair currently holds inside `lendingPool` for `token`, read
+    ///      directly from `ILendingPool.supplyBalanceOf` (shares * supplyIndex / WAD).
+    ///      Replaces a previously-stored static principal cache: querying live means accrued
+    ///      interest is always reflected in `getReserves()`/k-checks/sweeps without a separate
+    ///      reconciliation step, and a recall can never under/overflow a stale cache.
+    ///      Returns 0 when `lendingPool == address(0)` (AMM-only mode).
+    function _suppliedBalance(address token) private view returns (uint112) {
+        if (lendingPool == address(0)) return 0;
+        return uint112(ILendingPool(lendingPool).supplyBalanceOf(address(this), token));
     }
 }
