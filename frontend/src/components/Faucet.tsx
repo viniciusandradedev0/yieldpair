@@ -34,7 +34,7 @@ export function Faucet() {
   }
 
   return (
-    <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
+    <div className="yp-card p-4">
       <h2 className="text-sm font-semibold text-slate-200">Faucet (testnet)</h2>
       <p className="mt-1 text-xs text-slate-400">
         Garanta mUSDC e mWETH de teste para usar o swap, a liquidez e o lending.

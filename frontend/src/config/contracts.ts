@@ -22,6 +22,8 @@ export interface TokenInfo {
   symbol: string;
   name: string;
   decimals: number;
+  /** collateralFactor set on-chain via listMarket, as a percent (e.g. 80 == 0.80e18). */
+  collateralFactorPct: number;
 }
 
 export const TOKENS: Record<"mUSDC" | "mWETH", TokenInfo> = {
@@ -30,12 +32,14 @@ export const TOKENS: Record<"mUSDC" | "mWETH", TokenInfo> = {
     symbol: "mUSDC",
     name: "Mock USD Coin",
     decimals: 18,
+    collateralFactorPct: 80,
   },
   mWETH: {
     address: CONTRACTS.mWETH,
     symbol: "mWETH",
     name: "Mock Wrapped Ether",
     decimals: 18,
+    collateralFactorPct: 75,
   },
 };
 

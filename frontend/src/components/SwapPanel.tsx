@@ -114,7 +114,7 @@ export function SwapPanel() {
   const insufficientBalance = amountIn > 0n && amountIn > balanceIn;
 
   return (
-    <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
+    <div className="yp-card p-4 sm:p-5">
       <h2 className="text-lg font-semibold text-slate-100">Swap</h2>
 
       <div className="mt-4 flex flex-col gap-3">
@@ -193,7 +193,7 @@ export function SwapPanel() {
             type="button"
             onClick={handleApprove}
             disabled={approveAction.state.isBusy || amountIn === 0n}
-            className="rounded-lg bg-sky-600 py-2.5 font-semibold text-white transition hover:bg-sky-500 disabled:opacity-50"
+            className="yp-btn-accent rounded-lg py-2.5 font-semibold text-white transition disabled:opacity-50"
           >
             {approveAction.state.isBusy ? "Aprovando..." : `Aprovar ${tokenIn.symbol}`}
           </button>
@@ -204,7 +204,7 @@ export function SwapPanel() {
             type="button"
             onClick={handleSwap}
             disabled={swapAction.state.isBusy || amountIn === 0n || insufficientBalance}
-            className="rounded-lg bg-emerald-600 py-2.5 font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50"
+            className="yp-btn-primary rounded-lg py-2.5 font-semibold text-white transition disabled:opacity-50"
           >
             {insufficientBalance ? "Saldo insuficiente" : swapAction.state.isBusy ? "Trocando..." : "Trocar"}
           </button>

@@ -151,7 +151,7 @@ export function LiquidityPanel() {
   const lpBalance = (lpBalanceQuery.data as bigint | undefined) ?? 0n;
 
   return (
-    <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
+    <div className="yp-card p-4 sm:p-5">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-slate-100">Liquidez</h2>
         <div className="flex gap-1 text-xs">
@@ -223,7 +223,7 @@ export function LiquidityPanel() {
               type="button"
               onClick={handleAddLiquidity}
               disabled={addAction.state.isBusy || amountA === 0n || amountB === 0n}
-              className="rounded-lg bg-emerald-600 py-2.5 font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50"
+              className="yp-btn-primary rounded-lg py-2.5 font-semibold text-white transition disabled:opacity-50"
             >
               {addAction.state.isBusy ? "Adicionando..." : "Adicionar liquidez"}
             </button>
@@ -313,7 +313,7 @@ function ApproveButton({ label, isBusy, onClick }: { label: string; isBusy: bool
       type="button"
       onClick={onClick}
       disabled={isBusy}
-      className="rounded-lg bg-sky-600 py-2.5 font-semibold text-white transition hover:bg-sky-500 disabled:opacity-50"
+      className="yp-btn-accent rounded-lg py-2.5 font-semibold text-white transition disabled:opacity-50"
     >
       {isBusy ? "Aprovando..." : label}
     </button>
